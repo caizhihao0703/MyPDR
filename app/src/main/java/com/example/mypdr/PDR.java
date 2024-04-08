@@ -1,18 +1,23 @@
 package com.example.mypdr;
 
 import android.annotation.SuppressLint;
+
 import androidx.annotation.NonNull;
+
 import android.content.*;
 import android.hardware.*;
 import android.os.*;
 import android.view.View;
 import android.widget.*;
 import android.location.*;
+
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.appcompat.app.AppCompatActivity;
+
 import android.Manifest;
 import android.content.pm.PackageManager;
+
 import java.io.*;
 import java.text.*;
 import java.util.*;
@@ -47,6 +52,12 @@ public class PDR extends AppCompatActivity {
     static final int LOCATION_PERMISSION_REQUEST_CODE = 100;
     LocationManager locationManager;
     LocationListener locationListener;
+    private double roll, pitch, heading, startHeading;
+    private double mx, my;
+    private double omegaD, PsiD;
+    private double lastTime = 0;
+    private double lastOD = 0;
+    int iter = 0;
 
 
     @Override
@@ -106,24 +117,18 @@ public class PDR extends AppCompatActivity {
             if (lastKnownLocation != null) {
                 double latitude = lastKnownLocation.getLatitude();
                 double longitude = lastKnownLocation.getLongitude();
-                String slat = String.format("纬度: %.4f" , latitude);
-                String slon = String.format("经度: %.4f" , longitude);
+                String slat = String.format("纬度: %.4f", latitude);
+                String slon = String.format("经度: %.4f", longitude);
                 lat.setText(slat);
                 lon.setText(slon);
                 // 定义位置解析
                 Geocoder geocoder = new Geocoder(PDR.this, Locale.getDefault());
                 try {
-                    // 获取经纬度对于的位置
-                    // getFromLocation(纬度, 经度, 最多获取的位置数量)
                     List<Address> addresses = geocoder.getFromLocation(latitude, longitude, 1);
-                    // 得到第一个经纬度位置解析信息
                     Address address = addresses.get(0);
-                    // 获取到详细的当前位置
-                    // Address里面还有很多方法你们可以自行实现去尝试。比如具体省的名称、市的名称...
                     String info = address.getAddressLine(0);
-                    // 赋值
-                    nowAddress.setText("位置: "+info);
-                }catch (IOException e) {
+                    nowAddress.setText("位置: " + info);
+                } catch (IOException e) {
                     e.printStackTrace();
                 }
             }
@@ -138,24 +143,18 @@ public class PDR extends AppCompatActivity {
                 // 处理位置变化事件，location包含了实时位置信息
                 double latitude = location.getLatitude();
                 double longitude = location.getLongitude();
-                String slat = String.format("纬度: %.4f" , latitude);
-                String slon = String.format("经度: %.4f" , longitude);
+                String slat = String.format("纬度: %.4f", latitude);
+                String slon = String.format("经度: %.4f", longitude);
                 lat.setText(slat);
                 lon.setText(slon);
                 // 定义位置解析
                 Geocoder geocoder = new Geocoder(PDR.this, Locale.getDefault());
                 try {
-                    // 获取经纬度对于的位置
-                    // getFromLocation(纬度, 经度, 最多获取的位置数量)
                     List<Address> addresses = geocoder.getFromLocation(latitude, longitude, 1);
-                    // 得到第一个经纬度位置解析信息
                     Address address = addresses.get(0);
-                    // 获取到详细的当前位置
-                    // Address里面还有很多方法你们可以自行实现去尝试。比如具体省的名称、市的名称...
                     String info = address.getAddressLine(0);
-                    // 赋值
-                    nowAddress.setText("位置: "+info);
-                }catch (IOException e) {
+                    nowAddress.setText("位置: " + info);
+                } catch (IOException e) {
                     e.printStackTrace();
                 }
             }
@@ -163,9 +162,11 @@ public class PDR extends AppCompatActivity {
             @Override
             public void onStatusChanged(String provider, int status, Bundle extras) {
             }
+
             @Override
             public void onProviderEnabled(String provider) {
             }
+
             @Override
             public void onProviderDisabled(String provider) {
             }
@@ -234,7 +235,7 @@ public class PDR extends AppCompatActivity {
                 @Override
                 public void run() {
                     secondToNow += timeGap;
-                    updateHeanding(secondToNow);
+                    updateHeading(secondToNow);
                     try {
                         writeData();
                     } catch (IOException e) {
@@ -330,40 +331,32 @@ public class PDR extends AppCompatActivity {
         startActivity(intent);
     }
 
-    private double roll, pitch;
-    private double mx, my;
-    private double omegaD, PsiD;
-    private double heading;
-    private double lastTime = 0;
-    private double startHeading = 0;
-    private double lastOD = 0;
-
     @SuppressLint("SetTextI18n")
-    public void updateHeanding(float time) {
+    public void updateHeading(float time) {
         //航向角
+        //方向右前上
         pitch = Math.atan2(accData[1], Math.sqrt(accData[0] * accData[0] + accData[2] * accData[2]));
-        roll = Math.atan2(-accData[0], -accData[2]);
-        mx = magData[0] * Math.cos(pitch) * +magData[1] * Math.sin(roll) * Math.sin(pitch) + magData[2] * Math.cos(roll) * Math.sin(pitch);
-        my = magData[1] * Math.cos(roll) - magData[2] * Math.sin(roll);
-        PsiD = -Math.atan2(my, mx) * 180 / Math.PI;
+        roll = Math.atan2(-accData[0], accData[2]);
+        //初始航向角
+        if (iter == 0) {
+            mx = magData[1] * Math.cos(pitch) + magData[0] * Math.sin(roll) * Math.sin(pitch) + (-magData[2]) * Math.cos(roll) * Math.sin(pitch);
+            my = magData[0] * Math.cos(roll) - (-magData[2]) * Math.sin(roll);
+            PsiD = -Math.atan2(my, mx);
+            startHeading = PsiD + 9.9 * Math.PI / 180;
+            heading = startHeading;
+            iter++;
+        }
 
-
-        omegaD = -Math.sin(pitch) * gyrData[0] / Math.PI * 180 + Math.sin(roll) * Math.cos(pitch) * gyrData[1] / Math.PI * 180 + Math.cos(roll) * Math.cos(pitch) * gyrData[2] / Math.PI * 180;
-        if (Math.abs(omegaD) < 0.5f && Math.abs(lastOD) < 0.5f)
-            omegaD *= 0.0005;
-        double od = startHeading / 180 * Math.PI + omegaD / 180 * Math.PI * (time - lastTime) * 0.001;
-        if (od > Math.PI)
-            od -= Math.PI * 2;
-        if (od < -Math.PI)
-            od += Math.PI * 2;
-        heading = od;//弧度
-        startHeading = heading / Math.PI * 180;
-        lastTime = time;
-        lastOD = omegaD;
-        DecimalFormat df = new DecimalFormat("#0.00000");
+        omegaD = -Math.sin(pitch) * gyrData[1] + Math.sin(roll) * Math.cos(pitch) * gyrData[0] + Math.cos(roll) * Math.cos(pitch) * (-gyrData[2]);
+        heading += omegaD * timeGap * 0.001;
+        if (heading > Math.PI)
+            heading -= Math.PI * 2;
+        if (heading < -Math.PI)
+            heading += Math.PI * 2;
+        DecimalFormat df = new DecimalFormat("#0.0000");
         t1.setText("横滚角: " + df.format(roll * 180 / Math.PI));
         t2.setText("俯仰角: " + df.format(pitch * 180 / Math.PI));
-        t3.setText("航向角: " + df.format(startHeading));
+        t3.setText("航向角: " + df.format(heading * 180 / Math.PI));
     }
 
     public static float lastAcc = 99999f;
