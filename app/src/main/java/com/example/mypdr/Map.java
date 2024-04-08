@@ -13,7 +13,6 @@ public class Map extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_baidumap);
-
         mMapView = (MapView) findViewById(R.id.bmapView);
     }
 

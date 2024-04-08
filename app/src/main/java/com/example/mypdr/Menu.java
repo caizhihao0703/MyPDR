@@ -8,7 +8,6 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
-import android.view.View;
 import android.widget.Button;
 
 public class Menu extends AppCompatActivity {
@@ -22,12 +21,11 @@ public class Menu extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_menu);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {//android 6.0以上
-            //申请读写权限
-            int permission = ActivityCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE);
-            if (permission != PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(this, PERMISSIONS_STORAGE, REQUEST_EXTERNAL_STORAGE);
-            }
+        //android 6.0以上
+        //申请读写权限
+        int permission = ActivityCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE);
+        if (permission != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, PERMISSIONS_STORAGE, REQUEST_EXTERNAL_STORAGE);
         }
 
         Button toPDR = findViewById(R.id.toPDR);
@@ -38,7 +36,7 @@ public class Menu extends AppCompatActivity {
 
         Button collectdata = findViewById(R.id.collectData);
         collectdata.setOnClickListener(v -> {
-            Intent intent = new Intent(Menu.this, Data.class);
+            Intent intent = new Intent(Menu.this, PDRData.class);
             startActivity(intent);
         });
 

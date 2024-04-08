@@ -28,8 +28,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
     double[] accData = new double[3];
     double[] gyrData = new double[3];
     double[] magData = new double[3];
-
-
+    long startTime;
     TextView textStep, textDist;
     TextView t1, t2, t3, textTime;
     TextView nowAddress, lat, lon;
@@ -90,34 +89,40 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         mag = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
 
         startPDR = findViewById(R.id.startPDR);
+        showMap = findViewById(R.id.showMap);
+        showData = findViewById(R.id.showData);
         startPDR.setOnClickListener(v -> {
             if (isRecording) {
                 stopRecording();
+                showData.setEnabled(true);
             } else {
-                startRecording();
+                Toast.makeText(this, "请在界面上出现角度后开始走动", Toast.LENGTH_SHORT).show();
+                showData.setEnabled(false);
+                startPDR.setText("STOP");
+                new Handler().postDelayed(this::startRecording, 2000); // 延迟3秒
             }
         });
 
 
-//        showMap.setOnClickListener(v -> {
-//            Intent intent = new Intent(PDR.this, Map.class);
-//            startActivity(intent);
-//        });
-//        showData.setOnClickListener(v -> {
-//            Intent intent = new Intent(PDR.this, Data.class);
-//            startActivity(intent);
-//        });
+        showMap.setOnClickListener(v -> {
+            Intent intent = new Intent(PDR.this, Map.class);
+            startActivity(intent);
+        });
+        showData.setOnClickListener(v -> {
+            Intent intent = new Intent(PDR.this, PDRData.class);
+            startActivity(intent);
+        });
     }
 
     private void startRecording() {
         isRecording = true;
-        startPDR.setText("STOP");
-        sensorManager.registerListener(this, acc, SensorManager.SENSOR_DELAY_NORMAL);
-        sensorManager.registerListener(this, gyr, SensorManager.SENSOR_DELAY_NORMAL);
-        sensorManager.registerListener(this, mag, SensorManager.SENSOR_DELAY_NORMAL);
+        startTime = System.currentTimeMillis();
+        sensorManager.registerListener(this, acc, SensorManager.SENSOR_DELAY_GAME);
+        sensorManager.registerListener(this, gyr, SensorManager.SENSOR_DELAY_GAME);
+        sensorManager.registerListener(this, mag, SensorManager.SENSOR_DELAY_GAME);
 
         try {
-            file = new File(Environment.getExternalStorageDirectory(), "sensor_data.txt");
+            file = new File(Environment.getExternalStorageDirectory(), "PDRdata.txt");
             writer = new FileWriter(file);
         } catch (IOException e) {
             e.printStackTrace();
@@ -126,7 +131,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
 
     private void stopRecording() {
         isRecording = false;
-        startPDR.setText("START");
+        startPDR.setText("Start");
         sensorManager.unregisterListener(this);
         try {
             writer.close();
@@ -137,36 +142,55 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
 
     @Override
     public void onSensorChanged(SensorEvent event) {
-        if (event.sensor == acc) {
-            accData[0] = event.values[0];
-            accData[1] = event.values[1];
-            accData[2] = event.values[2];
-        } else if (event.sensor == gyr) {
-            gyrData[0] = event.values[0];
-            gyrData[1] = event.values[1];
-            gyrData[2] = event.values[2];
-        } else if (event.sensor == mag) {
-            magData[0] = event.values[0];
-            magData[1] = event.values[1];
-            magData[2] = event.values[2];
-        }
+
         if (isRecording) {
             try {
-                writer.write(event.sensor.getName() + ": " + Arrays.toString(event.values) + "\n");
+                if (event.sensor == acc) {
+                    accData[0] = event.values[0];
+                    accData[1] = event.values[1];
+                    accData[2] = event.values[2];
+                    double timeElapsed = (System.currentTimeMillis() - startTime) / 1000.0;
+                    String s = "acc," + String.format("%.3f,", timeElapsed);
+                    s += String.format("%.6f,", accData[0]);
+                    s += String.format("%.6f,", accData[1]);
+                    s += String.format("%.6f,", accData[2]);
+                    writer.write(s + "\n");
+                } else if (event.sensor == gyr) {
+                    gyrData[0] = event.values[0];
+                    gyrData[1] = event.values[1];
+                    gyrData[2] = event.values[2];
+                    double timeElapsed = (System.currentTimeMillis() - startTime) / 1000.0;
+                    String s = "gyo," + String.format("%.3f,", timeElapsed);
+                    s += String.format("%.6f,", gyrData[0]);
+                    s += String.format("%.6f,", gyrData[1]);
+                    s += String.format("%.6f,", gyrData[2]);
+                    writer.write(s + "\n");
+                } else if (event.sensor == mag) {
+                    magData[0] = event.values[0];
+                    magData[1] = event.values[1];
+                    magData[2] = event.values[2];
+                    double timeElapsed = (System.currentTimeMillis() - startTime) / 1000.0;
+                    String s = "mag," + String.format("%.3f,", timeElapsed);
+                    s += String.format("%.6f,", magData[0]);
+                    s += String.format("%.6f,", magData[1]);
+                    s += String.format("%.6f,", magData[2]);
+                    writer.write(s + "\n");
+                }
             } catch (IOException e) {
                 e.printStackTrace();
             }
-            secondToNow += timeGap;
-            updateHeading(secondToNow);
-            if (realTimeGetStep2((float) Math.sqrt(accData[0] * accData[0] + accData[1] * accData[1] + accData[2] * accData[2]), secondToNow)) {
-                stepNumber += 1;
-                textStep.setText("步数: " + stepNumber);
-                float meter = (float) (0.4 * Math.pow((float) (maxAcc2 - minAcc2), 1f / 4f));
-                p.draw((float) heading, meter);
-                totalDistance += meter;
-                DecimalFormat df = new DecimalFormat("#0.00000");
-                textDist.setText("移动距离: " + df.format(totalDistance) + "m");
-            }
+            //PDR算法
+//            secondToNow += timeGap;
+//            updateHeading(secondToNow);
+//            if (realTimeGetStep2((float) Math.sqrt(accData[0] * accData[0] + accData[1] * accData[1] + accData[2] * accData[2]), secondToNow)) {
+//                stepNumber += 1;
+//                textStep.setText("步数: " + stepNumber);
+//                float meter = (float) (0.4 * Math.pow((float) (maxAcc2 - minAcc2), 1f / 4f));
+//                p.draw((float) heading, meter);
+//                totalDistance += meter;
+//                DecimalFormat df = new DecimalFormat("#0.00000");
+//                textDist.setText("移动距离: " + df.format(totalDistance) + "m");
+//            }
         }
 
     }
