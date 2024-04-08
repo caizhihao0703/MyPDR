@@ -107,50 +107,48 @@
 
     <Button
         android:id="@+id/startPDR"
-        android:layout_width="300dp"
+        android:layout_width="140dp"
         android:layout_height="50dp"
         android:layout_marginStart="40dp"
         android:layout_marginTop="10dp"
-        android:layout_marginEnd="40dp"
-        android:background="@drawable/btn_2"
-        android:onClick="getSensor"
+        android:layout_marginEnd="200dp"
+        android:background="@drawable/btn_1"
         android:text="START"
         android:textSize="24dp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/textbg" />
 
-    <Button
-        android:id="@+id/endPDR"
-        android:layout_width="140dp"
-        android:layout_height="50dp"
-        android:layout_marginStart="40dp"
-        android:layout_marginTop="8dp"
-        android:layout_marginEnd="200dp"
-        android:background="@drawable/btn_1"
-        android:onClick="endSensor"
-        android:text="END"
-        android:textSize="24dp"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.083"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/textbg" />
 
     <Button
         android:id="@+id/showMap"
         android:layout_width="140dp"
         android:layout_height="50dp"
         android:layout_marginStart="200dp"
-        android:layout_marginTop="8dp"
+        android:layout_marginTop="10dp"
         android:layout_marginEnd="40dp"
         android:background="@drawable/btn_1"
-        android:onClick="showMap"
         android:text="Map"
         android:textSize="24dp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.516"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/textbg" />
+
+    <Button
+        android:id="@+id/showData"
+        android:layout_width="300dp"
+        android:layout_height="50dp"
+        android:layout_marginStart="40dp"
+        android:layout_marginTop="10dp"
+        android:layout_marginEnd="40dp"
+        android:background="@drawable/btn_1"
+        android:text="ShowData"
+        android:textSize="24dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.516"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/showMap" />
 
     <TextView
         android:id="@+id/lat"

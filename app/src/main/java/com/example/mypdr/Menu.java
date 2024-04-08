@@ -9,9 +9,11 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
+import android.widget.Button;
 
 public class Menu extends AppCompatActivity {
     static final int REQUEST_EXTERNAL_STORAGE = 1;
+    static final int LOCATION_PERMISSION_REQUEST_CODE = 100;
     static String[] PERMISSIONS_STORAGE = {
             Manifest.permission.READ_EXTERNAL_STORAGE,
             Manifest.permission.WRITE_EXTERNAL_STORAGE
@@ -27,23 +29,23 @@ public class Menu extends AppCompatActivity {
                 ActivityCompat.requestPermissions(this, PERMISSIONS_STORAGE, REQUEST_EXTERNAL_STORAGE);
             }
         }
+
+        Button toPDR = findViewById(R.id.toPDR);
+        toPDR.setOnClickListener(v -> {
+            Intent intent = new Intent(Menu.this, PDR.class);
+            startActivity(intent);
+        });
+
+        Button collectdata = findViewById(R.id.collectData);
+        collectdata.setOnClickListener(v -> {
+            Intent intent = new Intent(Menu.this, Data.class);
+            startActivity(intent);
+        });
+
+        Button setting = findViewById(R.id.setting);
+        setting.setOnClickListener(v -> {
+            Intent intent = new Intent(Menu.this, Setting.class);
+            startActivity(intent);
+        });
     }
-
-    public void startNewActivity(Class<?> cls) {
-        Intent intent = new Intent(this, cls);
-        startActivity(intent);
-    }
-
-    public void turnToSetting(View view) {
-        startNewActivity(Setting.class);
-    }
-
-    public void turnToPDR(View view) { startNewActivity(PDR.class); }
-
-    public void turnToShowData(View view){
-        startNewActivity(showData.class);
-    }
-
-
-
 }

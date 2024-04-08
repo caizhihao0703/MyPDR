@@ -1,9 +1,5 @@
 package com.example.mypdr;
 
-import android.annotation.SuppressLint;
-
-import androidx.annotation.NonNull;
-
 import android.content.*;
 import android.hardware.*;
 import android.os.*;
@@ -11,20 +7,13 @@ import android.view.View;
 import android.widget.*;
 import android.location.*;
 
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
 import androidx.appcompat.app.AppCompatActivity;
-
-import android.Manifest;
-import android.content.pm.PackageManager;
 
 import java.io.*;
 import java.text.*;
 import java.util.*;
 
-
-public class PDR extends AppCompatActivity {
-    boolean usingYAcc = false, usingGyro = false, usingMag = false;
+public class PDR extends AppCompatActivity implements SensorEventListener {
     float yAccLimit = 9.8f, yAccBias = 2f;
     int minNumberOfStep = 1;
     private ArrayList<Float> RTyAcc = new ArrayList<Float>();
@@ -40,6 +29,7 @@ public class PDR extends AppCompatActivity {
     double[] gyrData = new double[3];
     double[] magData = new double[3];
 
+
     TextView textStep, textDist;
     TextView t1, t2, t3, textTime;
     TextView nowAddress, lat, lon;
@@ -48,7 +38,7 @@ public class PDR extends AppCompatActivity {
     double stepLength = 0.5;
     private Handler timehandler;
     private SimpleDateFormat dateFormat;
-    Button startPDR, endPDR, showMap;
+    Button startPDR, showMap, showData;
     static final int LOCATION_PERMISSION_REQUEST_CODE = 100;
     LocationManager locationManager;
     LocationListener locationListener;
@@ -57,8 +47,13 @@ public class PDR extends AppCompatActivity {
     private double omegaD, PsiD;
     private double lastTime = 0;
     private double lastOD = 0;
+    double totalDistance = 0;
     int iter = 0;
-
+    boolean isRecording = false; // 用于记录数据采集状态
+    SensorManager sensorManager;
+    Sensor acc, gyr, mag;
+    private File file;
+    private FileWriter writer;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -66,11 +61,7 @@ public class PDR extends AppCompatActivity {
         setContentView(R.layout.activity_pdr);
         textStep = findViewById(R.id.stepNumber);
         textStep.setText("步数: ");
-        startPDR = findViewById(R.id.startPDR);
-        endPDR = findViewById(R.id.endPDR);
-        endPDR.setVisibility(View.INVISIBLE);
         showMap = findViewById(R.id.showMap);
-        showMap.setVisibility(View.INVISIBLE);
         t1 = findViewById(R.id.attText1);
         t2 = findViewById(R.id.attText2);
         t3 = findViewById(R.id.attText3);
@@ -87,114 +78,102 @@ public class PDR extends AppCompatActivity {
         textDist.setText("移动距离: ");
         textTime = findViewById(R.id.pdrTime);
         p = findViewById(R.id.PDRView);
+
         timehandler = new Handler();
         dateFormat = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss EEEE", Locale.getDefault());
         // 定时更新系统时间
         timehandler.postDelayed(updateTimeTask, 1000);
 
-        locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
-        // 检查位置权限
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-                != PackageManager.PERMISSION_GRANTED) {
-            // 如果没有位置权限，请求权限
-            ActivityCompat.requestPermissions(this,
-                    new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
-                    LOCATION_PERMISSION_REQUEST_CODE);
-        } else {
-            // 如果已经有位置权限，开始获取位置信息
-            startLocationUpdates();
-        }
-    }
+        sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
+        acc = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        gyr = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
+        mag = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
 
-    @Override
-    protected void onResume() {
-        super.onResume();
-        // 重新设置经度信息
-        if (locationListener != null && locationManager != null &&
-                ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-                        == PackageManager.PERMISSION_GRANTED) {
-            Location lastKnownLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
-            if (lastKnownLocation != null) {
-                double latitude = lastKnownLocation.getLatitude();
-                double longitude = lastKnownLocation.getLongitude();
-                String slat = String.format("纬度: %.4f", latitude);
-                String slon = String.format("经度: %.4f", longitude);
-                lat.setText(slat);
-                lon.setText(slon);
-                // 定义位置解析
-                Geocoder geocoder = new Geocoder(PDR.this, Locale.getDefault());
-                try {
-                    List<Address> addresses = geocoder.getFromLocation(latitude, longitude, 1);
-                    Address address = addresses.get(0);
-                    String info = address.getAddressLine(0);
-                    nowAddress.setText("位置: " + info);
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
-    }
-
-    private void startLocationUpdates() {
-        // 创建位置监听器
-        locationListener = new LocationListener() {
-            @Override
-            public void onLocationChanged(Location location) {
-                // 处理位置变化事件，location包含了实时位置信息
-                double latitude = location.getLatitude();
-                double longitude = location.getLongitude();
-                String slat = String.format("纬度: %.4f", latitude);
-                String slon = String.format("经度: %.4f", longitude);
-                lat.setText(slat);
-                lon.setText(slon);
-                // 定义位置解析
-                Geocoder geocoder = new Geocoder(PDR.this, Locale.getDefault());
-                try {
-                    List<Address> addresses = geocoder.getFromLocation(latitude, longitude, 1);
-                    Address address = addresses.get(0);
-                    String info = address.getAddressLine(0);
-                    nowAddress.setText("位置: " + info);
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-
-            @Override
-            public void onStatusChanged(String provider, int status, Bundle extras) {
-            }
-
-            @Override
-            public void onProviderEnabled(String provider) {
-            }
-
-            @Override
-            public void onProviderDisabled(String provider) {
-            }
-        };
-        // 请求位置更新前再次检查权限
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-                == PackageManager.PERMISSION_GRANTED) {
-            // 已经有位置权限，请求位置更新
-            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER,
-                    1000, 0, locationListener); // 修改这里的时间间隔为1000毫秒（1秒），距离间隔为0米
-        } else {
-            Toast.makeText(this, "Permission denied", Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
-                                           @NonNull int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == LOCATION_PERMISSION_REQUEST_CODE) {
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                // 用户授予了位置权限，开始获取位置信息
-                startLocationUpdates();
+        startPDR = findViewById(R.id.startPDR);
+        startPDR.setOnClickListener(v -> {
+            if (isRecording) {
+                stopRecording();
             } else {
-                // 用户拒绝了位置权限，可以给出相应提示或处理逻辑
-                Toast.makeText(this, "Permission denied", Toast.LENGTH_SHORT).show();
+                startRecording();
+            }
+        });
+
+
+//        showMap.setOnClickListener(v -> {
+//            Intent intent = new Intent(PDR.this, Map.class);
+//            startActivity(intent);
+//        });
+//        showData.setOnClickListener(v -> {
+//            Intent intent = new Intent(PDR.this, Data.class);
+//            startActivity(intent);
+//        });
+    }
+
+    private void startRecording() {
+        isRecording = true;
+        startPDR.setText("STOP");
+        sensorManager.registerListener(this, acc, SensorManager.SENSOR_DELAY_NORMAL);
+        sensorManager.registerListener(this, gyr, SensorManager.SENSOR_DELAY_NORMAL);
+        sensorManager.registerListener(this, mag, SensorManager.SENSOR_DELAY_NORMAL);
+
+        try {
+            file = new File(Environment.getExternalStorageDirectory(), "sensor_data.txt");
+            writer = new FileWriter(file);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void stopRecording() {
+        isRecording = false;
+        startPDR.setText("START");
+        sensorManager.unregisterListener(this);
+        try {
+            writer.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    @Override
+    public void onSensorChanged(SensorEvent event) {
+        if (event.sensor == acc) {
+            accData[0] = event.values[0];
+            accData[1] = event.values[1];
+            accData[2] = event.values[2];
+        } else if (event.sensor == gyr) {
+            gyrData[0] = event.values[0];
+            gyrData[1] = event.values[1];
+            gyrData[2] = event.values[2];
+        } else if (event.sensor == mag) {
+            magData[0] = event.values[0];
+            magData[1] = event.values[1];
+            magData[2] = event.values[2];
+        }
+        if (isRecording) {
+            try {
+                writer.write(event.sensor.getName() + ": " + Arrays.toString(event.values) + "\n");
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            secondToNow += timeGap;
+            updateHeading(secondToNow);
+            if (realTimeGetStep2((float) Math.sqrt(accData[0] * accData[0] + accData[1] * accData[1] + accData[2] * accData[2]), secondToNow)) {
+                stepNumber += 1;
+                textStep.setText("步数: " + stepNumber);
+                float meter = (float) (0.4 * Math.pow((float) (maxAcc2 - minAcc2), 1f / 4f));
+                p.draw((float) heading, meter);
+                totalDistance += meter;
+                DecimalFormat df = new DecimalFormat("#0.00000");
+                textDist.setText("移动距离: " + df.format(totalDistance) + "m");
             }
         }
+
+    }
+
+    @Override
+    public void onAccuracyChanged(Sensor sensor, int accuracy) {
+        // Do something here if sensor accuracy changes.
     }
 
     // 更新系统时间的任务
@@ -224,114 +203,6 @@ public class PDR extends AppCompatActivity {
         }
     }
 
-    float totalDistance = 0;
-    Handler handler = new Handler();
-    Timer timer = new Timer(true);
-    TimerTask timerTask = new TimerTask() {
-        @Override
-        public void run() {
-            handler.post(new Runnable() {
-                @SuppressLint("SetTextI18n")
-                @Override
-                public void run() {
-                    secondToNow += timeGap;
-                    updateHeading(secondToNow);
-                    try {
-                        writeData();
-                    } catch (IOException e) {
-                        throw new RuntimeException(e);
-                    }
-                    if (realTimeGetStep2((float) Math.sqrt(accData[0] * accData[0] + accData[1] * accData[1] + accData[2] * accData[2]), secondToNow)) {
-                        stepNumber += 1;
-                        textStep.setText("步数: " + stepNumber);
-                        float meter = (float) (0.4 * Math.pow((float) (maxAcc2 - minAcc2), 1f / 4f));
-                        p.draw((float) heading, meter);
-                        totalDistance += meter;
-                        DecimalFormat df = new DecimalFormat("#0.00000");
-                        textDist.setText("移动距离: " + df.format(totalDistance) + "m");
-                    }
-                }
-            });
-        }
-    };
-
-    protected void writeData() throws IOException {
-        String s = String.valueOf(secondToNow);
-        DecimalFormat df = new DecimalFormat("#0.0000");
-        s += " " + df.format(accData[0]) + " " + df.format(accData[1]) + " " + df.format(accData[2]);
-        s += " " + df.format(gyrData[0]) + " " + df.format(gyrData[1]) + " " + df.format(gyrData[2]);
-        s += " " + df.format(magData[0]) + " " + df.format(magData[1]) + " " + df.format(magData[2]) + "\n";
-        writeData(s);
-        //String yAcc= String.valueOf(accData[1]) + "\n";
-    }
-
-    public void writeData(String data) throws IOException {
-        FileOutputStream fos = openFileOutput("PDRdata.txt", MODE_APPEND);
-        fos.write(data.getBytes());
-        fos.close();
-    }
-
-
-    yAccListener accSensor;
-    gyroListener gyroL;
-    magListener magSensor;
-    SensorManager sensorManager;
-    Sensor acc;
-    Sensor gyr;
-    Sensor mag;
-
-    public void getSensor(View view) {
-        sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
-        List<Sensor> sensors = sensorManager.getSensorList(Sensor.TYPE_ALL);
-        //TextView t = (TextView) findViewById(R.id.text1);
-        //t.setText("");
-        accSensor = new yAccListener();
-        gyroL = new gyroListener();
-        magSensor = new magListener();
-        for (Sensor s : sensors) {
-            if (s.getType() == Sensor.TYPE_ACCELEROMETER && !usingYAcc) {
-                sensorManager.registerListener(accSensor, s, SensorManager.SENSOR_DELAY_UI);
-                usingYAcc = true;
-                acc = s;
-            }
-            if (s.getType() == Sensor.TYPE_GYROSCOPE && !usingGyro) {
-                sensorManager.registerListener(gyroL, s, SensorManager.SENSOR_DELAY_UI);
-                usingGyro = true;
-                gyr = s;
-            }
-            if (s.getType() == Sensor.TYPE_MAGNETIC_FIELD && !usingMag) {
-                sensorManager.registerListener(magSensor, s, SensorManager.SENSOR_DELAY_UI);
-                usingMag = true;
-                mag = s;
-            }
-        }
-        timer.schedule(timerTask, 3000, timeGap);
-
-        startPDR.setVisibility(View.GONE);
-        endPDR.setVisibility(View.VISIBLE);
-        showMap.setVisibility(View.VISIBLE);
-        Toast.makeText(this, "请待上方出现数据后开始行走", Toast.LENGTH_SHORT).show();
-        //t.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
-    }
-
-    public void endSensor(View view) {
-        sensorManager.unregisterListener(accSensor, acc);
-        sensorManager.unregisterListener(gyroL, gyr);
-        sensorManager.unregisterListener(magSensor, mag);
-        timer.cancel();
-        showData.mod = 1;
-        Intent intent = new Intent();
-        intent.setClass(PDR.this, showData.class);
-        startActivity(intent);
-    }
-
-    public void showMap(View view) {
-        Intent intent = new Intent();
-        intent.setClass(PDR.this, showMap.class);
-        startActivity(intent);
-    }
-
-    @SuppressLint("SetTextI18n")
     public void updateHeading(float time) {
         //航向角
         //方向右前上
@@ -473,54 +344,5 @@ public class PDR extends AppCompatActivity {
             }
         }
         return step;
-    }
-
-    private class yAccListener implements SensorEventListener {
-        @SuppressLint("SetTextI18n")
-        @Override
-        public void onSensorChanged(SensorEvent event) {
-            //TextView t1=(TextView)findViewById(R.id.accText);
-            accData[0] = event.values[0];
-            accData[1] = event.values[1];
-            accData[2] = event.values[2];
-            //String s = "ACC : [x: "+event.values[0] + "][y: "+event.values[1] + "][z: "+event.values[2];
-        }
-
-        @Override
-        public void onAccuracyChanged(Sensor sensor, int i) {
-        }
-    }
-
-    private class gyroListener implements SensorEventListener {
-        @SuppressLint("SetTextI18n")
-        @Override
-        public void onSensorChanged(SensorEvent event) {
-            gyrData[0] = event.values[0];
-            gyrData[1] = event.values[1];
-            gyrData[2] = event.values[2];
-            String s = "GYRO : [x: " + event.values[0] + "][y: " + event.values[1] + "][z: " + event.values[2];
-        }
-
-        @Override
-        public void onAccuracyChanged(Sensor sensor, int i) {
-        }
-    }
-
-    private class magListener implements SensorEventListener {
-        @SuppressLint("SetTextI18n")
-        @Override
-        public void onSensorChanged(SensorEvent event) {
-            //TextView t1=(TextView)findViewById(R.id.mag);
-
-            String s = "MAG : [x: " + event.values[0] + "][y: " + event.values[1] + "][z: " + event.values[2];
-            magData[0] = event.values[0];
-            magData[1] = event.values[1];
-            magData[2] = event.values[2];
-        }
-
-        @Override
-        public void onAccuracyChanged(Sensor sensor, int i) {
-
-        }
     }
 }

@@ -8,7 +8,6 @@ import androidx.appcompat.app.AppCompatActivity;
 import android.widget.SeekBar;
 import android.widget.TextView;
 
-
 public class Setting extends AppCompatActivity {
     SeekBar seekBar1;
     SeekBar seekBar2;
