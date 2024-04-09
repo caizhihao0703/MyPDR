@@ -55,6 +55,8 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
     SensorManager sensorManager;
     Sensor acc, gyr, mag;
     FileOutputStream outputStream;
+    double[] Quat = new double[4];
+    double q0, q1, q2, q3;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -195,7 +197,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
                 getStartHeading();
                 iter++;
             } else if (havegyrdata && havestartheading) {
-                updateHeading(GYROtimeGap);
+                updateHeading(GYROtimeGap/2);
             }
 //            if (realTimeGetStep2((float) Math.sqrt(accData[0] * accData[0] + accData[1] * accData[1] + accData[2] * accData[2]), secondToNow)) {
 //                stepNumber += 1;
@@ -253,6 +255,18 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         startHeading = PsiD;
         heading = startHeading;
 
+        Quat[0] = Math.cos(startHeading / 2) * Math.cos(pitch / 2) * Math.cos(roll / 2)
+                + Math.sin(startHeading / 2) * Math.sin(pitch / 2) * Math.sin(roll / 2);
+        Quat[1] = Math.cos(startHeading / 2) * Math.cos(pitch / 2) * Math.sin(roll / 2)
+                - Math.sin(startHeading / 2) * Math.sin(pitch / 2) * Math.cos(roll / 2);
+        Quat[2] = Math.cos(startHeading / 2) * Math.sin(pitch / 2) * Math.cos(roll / 2)
+                + Math.sin(startHeading / 2) * Math.cos(pitch / 2) * Math.sin(roll / 2);
+        Quat[3] = Math.sin(startHeading / 2) * Math.cos(pitch / 2) * Math.cos(roll / 2)
+                - Math.cos(startHeading / 2) * Math.sin(pitch / 2) * Math.sin(roll / 2);
+        q0 = Quat[0];
+        q1 = Quat[1];
+        q2 = Quat[2];
+        q3 = Quat[3];
         DecimalFormat df = new DecimalFormat("#0.0000");
         t1.setText("横滚角: " + df.format(roll * 180 / Math.PI));
         t2.setText("俯仰角: " + df.format(pitch * 180 / Math.PI));
@@ -260,17 +274,96 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
     }
 
     public void updateHeading(double timeGap) {
-        //航向角
-        //方向右前上
-        pitch = Math.atan2(accData[1], Math.sqrt(accData[0] * accData[0] + accData[2] * accData[2]));
-        roll = Math.atan2(-accData[0], accData[2]);
+//        //航向角
+//        //方向右前上
+//        pitch = Math.atan2(accData[1], Math.sqrt(accData[0] * accData[0] + accData[2] * accData[2]));
+//        roll = Math.atan2(-accData[0], accData[2]);
+//
+//        omegaD = -Math.sin(pitch) * gyrData[1] + Math.sin(roll) * Math.cos(pitch) * gyrData[0] + Math.cos(roll) * Math.cos(pitch) * (-gyrData[2]);
+//        heading += omegaD * timeGap / 2.0;
+//        if (heading > Math.PI)
+//            heading -= Math.PI * 2;
+//        else if (heading < -Math.PI)
+//            heading += Math.PI * 2;
 
-        omegaD = -Math.sin(pitch) * gyrData[1] + Math.sin(roll) * Math.cos(pitch) * gyrData[0] + Math.cos(roll) * Math.cos(pitch) * (-gyrData[2]);
-        heading += omegaD * timeGap / 2.0;
-        if (heading > Math.PI)
-            heading -= Math.PI * 2;
-        else if (heading < -Math.PI)
-            heading += Math.PI * 2;
+        double Ki = 0.001, Kp = 1;
+        double[] eInt = new double[3];
+        double ax = accData[0], ay = accData[1], az = accData[2];
+        double mx = magData[0], my = magData[1], mz = magData[2];
+        double gx = gyrData[0], gy = gyrData[1], gz = gyrData[2];
+        double norm;
+        double vx, vy, vz;
+        double wx, wy, wz;
+        double ex, ey, ez;
+        double hx, hy, hz;
+        double bx, bz;
+        double q0q0 = q0 * q0;
+        double q0q1 = q0 * q1;
+        double q0q2 = q0 * q2;
+        double q0q3 = q0 * q3;
+        double q1q1 = q1 * q1;
+        double q1q2 = q1 * q2;
+        double q1q3 = q1 * q3;
+        double q2q2 = q2 * q2;
+        double q2q3 = q2 * q3;
+        double q3q3 = q3 * q3;
+
+        // 加速度计归一化
+        norm = Math.sqrt(ax * ax + ay * ay + az * az);
+        norm = 1.0f / norm;
+        ax *= norm;
+        ay *= norm;
+        az *= norm;
+        // 磁力计归一化
+        norm = Math.sqrt(mx * mx + my * my + mz * mz);
+        norm = 1.0f / norm;
+        mx *= norm;
+        my *= norm;
+        mz *= norm;
+
+        vx = 2f * (q1q3 - q0q2);
+        vy = 2f * (q2q3 + q0q1);
+        vz = q0q0 - q1q1 - q2q2 + q3q3;
+
+        hx = 2f * mx * (0.5f - q2q2 - q3q3) + 2f * my * (q1q2 - q0q3) + 2f * mz * (q1q3 + q0q2);
+        hy = 2f * mx * (q1q2 + q0q3) + 2f * my * (0.5f - q1q1 - q3q3) + 2f * mz * (q2q3 - q0q1);
+        hz = 2f * mx * (q1q3 - q0q2) + 2f * my * (q2q3 + q0q1) + 2f * mz * (0.5f - q1q1 - q2q2);
+        bx = Math.sqrt((hx * hx) + (hy * hy));
+        bz = hz;
+        wx = 2f * bx * (0.5f - q2q2 - q3q3) + 2f * bz * (q1q3 - q0q2);
+        wy = 2f * bx * (q1q2 - q0q3) + 2f * bz * (q0q1 + q2q3);
+        wz = 2f * bx * (q0q2 + q1q3) + 2f * bz * (0.5f - q1q1 - q2q2);
+
+        ex = (ay * vz - az * vy) + (my * wz - mz * wy);
+        ey = (az * vx - ax * vz) + (mz * wx - mx * wz);
+        ez = (ax * vy - ay * vx) + (mx * wy - my * wx);
+        eInt[0] += ex;      // accumulate integral error
+        eInt[1] += ey;
+        eInt[2] += ez;
+
+        gx = gx + Kp * ex + Ki * eInt[0];
+        gy = gy + Kp * ey + Ki * eInt[1];
+        gz = gz + Kp * ez + Ki * eInt[2];
+
+        double pa = q1;
+        double pb = q2;
+        double pc = q3;
+        q0 = q0 + (-q1 * gx - q2 * gy - q3 * gz) * (0.5f * timeGap);
+        q1 = pa + (q0 * gx + pb * gz - pc * gy) * (0.5f * timeGap);
+        q2 = pb + (q0 * gy - pa * gz + pc * gx) * (0.5f * timeGap);
+        q3 = pc + (q0 * gz + pa * gy - pb * gx) * (0.5f * timeGap);
+
+        norm = Math.sqrt(q0 * q0 + q1 * q1 + q2 * q2 + q3 * q3);
+        norm = 1.0f / norm;
+        q0 *= norm;
+        q1 *= norm;
+        q2 *= norm;
+        q3 *= norm;
+
+        pitch = Math.atan2(2 * (q2 * q3 + q0 * q1), 1 - 2 * (q1 * q1 + q2 * q2));
+        roll = Math.asin(2 * (q0 * q2 - q1 * q3));
+        heading = Math.atan2(2 * (q1 * q2 + q0 * q3), 1 - 2 * (q2 * q2 + q3 * q3));
+
 
         DecimalFormat df = new DecimalFormat("#0.0000");
         t1.setText("横滚角: " + df.format(roll * 180 / Math.PI));
