@@ -57,6 +57,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
     FileOutputStream outputStream;
     double[] Quat = new double[4];
     double q0, q1, q2, q3;
+    double[] eInt = new double[3];
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -197,7 +198,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
                 getStartHeading();
                 iter++;
             } else if (havegyrdata && havestartheading) {
-                updateHeading(GYROtimeGap/2);
+                updateHeading(GYROtimeGap / 2);
             }
 //            if (realTimeGetStep2((float) Math.sqrt(accData[0] * accData[0] + accData[1] * accData[1] + accData[2] * accData[2]), secondToNow)) {
 //                stepNumber += 1;
@@ -287,7 +288,6 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
 //            heading += Math.PI * 2;
 
         double Ki = 0.001, Kp = 1;
-        double[] eInt = new double[3];
         double ax = accData[0], ay = accData[1], az = accData[2];
         double mx = magData[0], my = magData[1], mz = magData[2];
         double gx = gyrData[0], gy = gyrData[1], gz = gyrData[2];
@@ -310,36 +310,34 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
 
         // 加速度计归一化
         norm = Math.sqrt(ax * ax + ay * ay + az * az);
-        norm = 1.0f / norm;
-        ax *= norm;
-        ay *= norm;
-        az *= norm;
+        ax /= norm;
+        ay /= norm;
+        az /= norm;
         // 磁力计归一化
         norm = Math.sqrt(mx * mx + my * my + mz * mz);
-        norm = 1.0f / norm;
-        mx *= norm;
-        my *= norm;
-        mz *= norm;
+        mx /= norm;
+        my /= norm;
+        mz /= norm;
 
-        vx = 2f * (q1q3 - q0q2);
-        vy = 2f * (q2q3 + q0q1);
+        vx = 2 * (q1q3 - q0q2);
+        vy = 2 * (q2q3 + q0q1);
         vz = q0q0 - q1q1 - q2q2 + q3q3;
 
-        hx = 2f * mx * (0.5f - q2q2 - q3q3) + 2f * my * (q1q2 - q0q3) + 2f * mz * (q1q3 + q0q2);
-        hy = 2f * mx * (q1q2 + q0q3) + 2f * my * (0.5f - q1q1 - q3q3) + 2f * mz * (q2q3 - q0q1);
-        hz = 2f * mx * (q1q3 - q0q2) + 2f * my * (q2q3 + q0q1) + 2f * mz * (0.5f - q1q1 - q2q2);
+        hx = 2 * mx * (0.5 - q2q2 - q3q3) + 2 * my * (q1q2 - q0q3) + 2 * mz * (q1q3 + q0q2);
+        hy = 2 * mx * (q1q2 + q0q3) + 2 * my * (0.5 - q1q1 - q3q3) + 2 * mz * (q2q3 - q0q1);
+        hz = 2 * mx * (q1q3 - q0q2) + 2 * my * (q2q3 + q0q1) + 2f * mz * (0.5 - q1q1 - q2q2);
         bx = Math.sqrt((hx * hx) + (hy * hy));
         bz = hz;
-        wx = 2f * bx * (0.5f - q2q2 - q3q3) + 2f * bz * (q1q3 - q0q2);
-        wy = 2f * bx * (q1q2 - q0q3) + 2f * bz * (q0q1 + q2q3);
-        wz = 2f * bx * (q0q2 + q1q3) + 2f * bz * (0.5f - q1q1 - q2q2);
+        wx = 2 * bx * (0.5 - q2q2 - q3q3) + 2 * bz * (q1q3 - q0q2);
+        wy = 2 * bx * (q1q2 - q0q3) + 2 * bz * (q0q1 + q2q3);
+        wz = 2 * bx * (q0q2 + q1q3) + 2 * bz * (0.5 - q1q1 - q2q2);
 
         ex = (ay * vz - az * vy) + (my * wz - mz * wy);
         ey = (az * vx - ax * vz) + (mz * wx - mx * wz);
         ez = (ax * vy - ay * vx) + (mx * wy - my * wx);
-        eInt[0] += ex;      // accumulate integral error
-        eInt[1] += ey;
-        eInt[2] += ez;
+        eInt[0] += ex * timeGap;      // accumulate integral error
+        eInt[1] += ey * timeGap;
+        eInt[2] += ez * timeGap;
 
         gx = gx + Kp * ex + Ki * eInt[0];
         gy = gy + Kp * ey + Ki * eInt[1];
@@ -348,17 +346,16 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         double pa = q1;
         double pb = q2;
         double pc = q3;
-        q0 = q0 + (-q1 * gx - q2 * gy - q3 * gz) * (0.5f * timeGap);
-        q1 = pa + (q0 * gx + pb * gz - pc * gy) * (0.5f * timeGap);
-        q2 = pb + (q0 * gy - pa * gz + pc * gx) * (0.5f * timeGap);
-        q3 = pc + (q0 * gz + pa * gy - pb * gx) * (0.5f * timeGap);
+        q0 = q0 + (-q1 * gx - q2 * gy - q3 * gz) * (0.5 * timeGap);
+        q1 = pa + (q0 * gx + pb * gz - pc * gy) * (0.5 * timeGap);
+        q2 = pb + (q0 * gy - pa * gz + pc * gx) * (0.5 * timeGap);
+        q3 = pc + (q0 * gz + pa * gy - pb * gx) * (0.5 * timeGap);
 
         norm = Math.sqrt(q0 * q0 + q1 * q1 + q2 * q2 + q3 * q3);
-        norm = 1.0f / norm;
-        q0 *= norm;
-        q1 *= norm;
-        q2 *= norm;
-        q3 *= norm;
+        q0 /= norm;
+        q1 /= norm;
+        q2 /= norm;
+        q3 /= norm;
 
         pitch = Math.atan2(2 * (q2 * q3 + q0 * q1), 1 - 2 * (q1 * q1 + q2 * q2));
         roll = Math.asin(2 * (q0 * q2 - q1 * q3));
