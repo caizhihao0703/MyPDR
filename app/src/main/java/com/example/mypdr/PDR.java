@@ -337,9 +337,6 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         ay /= norm;
         az /= norm;
 
-//        vx = 2 * (q1q3 - q0q2);
-//        vy = 2 * (q2q3 + q0q1);
-//        vz = q0q0 - 0.5 + q3q3;
         vx = q1q3 - q0q2;
         vy = q2q3 + q0q1;
         vz = q0q0 - 0.5 + q3q3;
@@ -347,7 +344,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         ex = (ay * vz - az * vy);
         ey = (az * vx - ax * vz);
         ez = (ax * vy - ay * vx);
-        eInt[0] += Ki * ex * timeGap;      // accumulate integral error
+        eInt[0] += Ki * ex * timeGap;
         eInt[1] += Ki * ey * timeGap;
         eInt[2] += Ki * ez * timeGap;
 
@@ -376,7 +373,6 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
             heading -= Math.PI * 2;
         else if (heading < -Math.PI)
             heading += Math.PI * 2;
-
 
         DecimalFormat df = new DecimalFormat("#0.000000");
         t1.setText("横滚角: " + df.format(roll * 180 / Math.PI) + "°");

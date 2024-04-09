@@ -1,42 +1,52 @@
 package com.example.mypdr;
 
 import androidx.appcompat.app.AppCompatActivity;
-import android.annotation.SuppressLint;
-import android.icu.text.SimpleDateFormat;
 import android.os.Bundle;
-import android.os.Environment;
-import android.text.method.ScrollingMovementMethod;
-import android.util.Log;
-import android.view.View;
 import android.widget.TextView;
-import android.widget.Toast;
 import java.io.*;
-import java.util.Date;
 import java.util.Scanner;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 public class PDRData extends AppCompatActivity {
 
     private TextView dataView;
+    private ExecutorService executorService = Executors.newSingleThreadExecutor();
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_show_data);
 
+        dataView = findViewById(R.id.dataView);
+
+        loadData();
+    }
+
+    private void loadData() {
+        Future<StringBuilder> future = executorService.submit(this::loadFileContent);
+        executorService.shutdown();
+
+        try {
+            StringBuilder data = future.get();
+            dataView.setText(data.toString());
+        } catch (ExecutionException | InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private StringBuilder loadFileContent() {
         File file = new File(getExternalFilesDir(null), "pdrData.txt");
         Scanner scanner = null;
+        StringBuilder data = new StringBuilder();
         try {
             scanner = new Scanner(file);
-
-            // 使用StringBuilder将文件中的所有行组合到一起
-            StringBuilder data = new StringBuilder();
             while (scanner.hasNextLine()) {
                 String line = scanner.nextLine();
                 data.append(line).append("\n");
             }
-
-            // 找到你的TextView，并将数据设置到TextView
-            dataView = findViewById(R.id.dataView);
-            dataView.setText(data.toString());
         } catch (FileNotFoundException e) {
             e.printStackTrace();
         } finally {
@@ -44,9 +54,7 @@ public class PDRData extends AppCompatActivity {
                 scanner.close();
             }
         }
-
+        return data;
     }
-
-
-
 }
+
