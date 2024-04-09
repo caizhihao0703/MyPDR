@@ -12,6 +12,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 import java.io.*;
 import java.util.Date;
+import java.util.Scanner;
 
 public class PDRData extends AppCompatActivity {
 
@@ -21,37 +22,31 @@ public class PDRData extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_show_data);
 
-        dataView = findViewById(R.id.dataView);
-        String data = loadDataFromFile();
-        dataView.setText(data);
-    }
-
-    private String loadDataFromFile() {
-        // 定义一个StringBuilder来存储文件内容
-        StringBuilder contentBuilder = new StringBuilder();
-
+        File file = new File(getExternalFilesDir(null), "pdrData.txt");
+        Scanner scanner = null;
         try {
-            // 定位到你的数据文件
-            File file = new File(Environment.getExternalStorageDirectory(), "PDRdata.txt");
+            scanner = new Scanner(file);
 
-            // 用BufferedReader包装FileReader来提高效率
-            // try-with-resources语句确保BufferedReader在读取完文件后能正确关闭
-            try (BufferedReader br = new BufferedReader(new FileReader(file))) {
-                String line;
-
-                // 逐行读取文件内容
-                while ((line = br.readLine()) != null) {
-                    contentBuilder.append(line).append('\n');
-                }
+            // 使用StringBuilder将文件中的所有行组合到一起
+            StringBuilder data = new StringBuilder();
+            while (scanner.hasNextLine()) {
+                String line = scanner.nextLine();
+                data.append(line).append("\n");
             }
-        } catch (IOException e) {
-            // 如果遇到错误，打印错误信息
+
+            // 找到你的TextView，并将数据设置到TextView
+            dataView = findViewById(R.id.dataView);
+            dataView.setText(data.toString());
+        } catch (FileNotFoundException e) {
             e.printStackTrace();
+        } finally {
+            if (scanner != null) {
+                scanner.close();
+            }
         }
 
-        // 返回文件内容
-        return contentBuilder.toString();
     }
+
 
 
 }

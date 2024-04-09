@@ -14,7 +14,6 @@ public class Setting extends AppCompatActivity {
     TextView textView1;
     TextView textView2;
 
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);

@@ -10,6 +10,7 @@ import android.location.*;
 import androidx.appcompat.app.AppCompatActivity;
 
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.text.*;
 import java.util.*;
 
@@ -29,6 +30,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
     double[] gyrData = new double[3];
     double[] magData = new double[3];
     long startTime;
+    double GYROtimeGap, lastGYROtime;
     TextView textStep, textDist;
     TextView t1, t2, t3, textTime;
     TextView nowAddress, lat, lon;
@@ -51,8 +53,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
     boolean isRecording = false; // 用于记录数据采集状态
     SensorManager sensorManager;
     Sensor acc, gyr, mag;
-    private File file;
-    private FileWriter writer;
+    FileOutputStream outputStream;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -98,7 +99,8 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
             } else {
                 Toast.makeText(this, "请在界面上出现角度后开始走动", Toast.LENGTH_SHORT).show();
                 showData.setEnabled(false);
-                startPDR.setText("STOP");
+                startPDR.setText("Stop");
+                startPDR.setEnabled(false);
                 new Handler().postDelayed(this::startRecording, 2000); // 延迟3秒
             }
         });
@@ -116,14 +118,16 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
 
     private void startRecording() {
         isRecording = true;
+        startPDR.setEnabled(true);
         startTime = System.currentTimeMillis();
+        lastGYROtime = startTime / 1000.0;
         sensorManager.registerListener(this, acc, SensorManager.SENSOR_DELAY_GAME);
         sensorManager.registerListener(this, gyr, SensorManager.SENSOR_DELAY_GAME);
         sensorManager.registerListener(this, mag, SensorManager.SENSOR_DELAY_GAME);
 
         try {
-            file = new File(Environment.getExternalStorageDirectory(), "PDRdata.txt");
-            writer = new FileWriter(file);
+            File file = new File(getExternalFilesDir(null), "pdrData.txt");
+            outputStream = new FileOutputStream(file);
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -134,7 +138,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         startPDR.setText("Start");
         sensorManager.unregisterListener(this);
         try {
-            writer.close();
+            outputStream.close();
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -153,18 +157,22 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
                     String s = "acc," + String.format("%.3f,", timeElapsed);
                     s += String.format("%.6f,", accData[0]);
                     s += String.format("%.6f,", accData[1]);
-                    s += String.format("%.6f,", accData[2]);
-                    writer.write(s + "\n");
+                    s += String.format("%.6f,", accData[2]) + "\n";
+                    outputStream.write(s.getBytes());
                 } else if (event.sensor == gyr) {
                     gyrData[0] = event.values[0];
                     gyrData[1] = event.values[1];
                     gyrData[2] = event.values[2];
                     double timeElapsed = (System.currentTimeMillis() - startTime) / 1000.0;
+                    GYROtimeGap = timeElapsed - lastGYROtime;
+                    lastGYROtime = timeElapsed;
                     String s = "gyo," + String.format("%.3f,", timeElapsed);
                     s += String.format("%.6f,", gyrData[0]);
                     s += String.format("%.6f,", gyrData[1]);
-                    s += String.format("%.6f,", gyrData[2]);
-                    writer.write(s + "\n");
+                    s += String.format("%.6f,", gyrData[2]) + "\n";
+                    outputStream.write(s.getBytes());
+
+                    updateHeading(GYROtimeGap);
                 } else if (event.sensor == mag) {
                     magData[0] = event.values[0];
                     magData[1] = event.values[1];
@@ -173,15 +181,14 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
                     String s = "mag," + String.format("%.3f,", timeElapsed);
                     s += String.format("%.6f,", magData[0]);
                     s += String.format("%.6f,", magData[1]);
-                    s += String.format("%.6f,", magData[2]);
-                    writer.write(s + "\n");
+                    s += String.format("%.6f,", magData[2]) + "\n";
+                    outputStream.write(s.getBytes());
                 }
             } catch (IOException e) {
                 e.printStackTrace();
             }
             //PDR算法
-//            secondToNow += timeGap;
-//            updateHeading(secondToNow);
+
 //            if (realTimeGetStep2((float) Math.sqrt(accData[0] * accData[0] + accData[1] * accData[1] + accData[2] * accData[2]), secondToNow)) {
 //                stepNumber += 1;
 //                textStep.setText("步数: " + stepNumber);
@@ -227,7 +234,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         }
     }
 
-    public void updateHeading(float time) {
+    public void updateHeading(double timeGap) {
         //航向角
         //方向右前上
         pitch = Math.atan2(accData[1], Math.sqrt(accData[0] * accData[0] + accData[2] * accData[2]));
@@ -237,17 +244,17 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
             mx = magData[1] * Math.cos(pitch) + magData[0] * Math.sin(roll) * Math.sin(pitch) + (-magData[2]) * Math.cos(roll) * Math.sin(pitch);
             my = magData[0] * Math.cos(roll) - (-magData[2]) * Math.sin(roll);
             PsiD = -Math.atan2(my, mx);
-            startHeading = PsiD + 9.9 * Math.PI / 180;
+            startHeading = PsiD;
             heading = startHeading;
             iter++;
+        } else {
+            omegaD = -Math.sin(pitch) * gyrData[1] + Math.sin(roll) * Math.cos(pitch) * gyrData[0] + Math.cos(roll) * Math.cos(pitch) * (-gyrData[2]);
+            heading += omegaD * timeGap;
+            if (heading > Math.PI)
+                heading -= Math.PI * 2;
+            if (heading < -Math.PI)
+                heading += Math.PI * 2;
         }
-
-        omegaD = -Math.sin(pitch) * gyrData[1] + Math.sin(roll) * Math.cos(pitch) * gyrData[0] + Math.cos(roll) * Math.cos(pitch) * (-gyrData[2]);
-        heading += omegaD * timeGap * 0.001;
-        if (heading > Math.PI)
-            heading -= Math.PI * 2;
-        if (heading < -Math.PI)
-            heading += Math.PI * 2;
         DecimalFormat df = new DecimalFormat("#0.0000");
         t1.setText("横滚角: " + df.format(roll * 180 / Math.PI));
         t2.setText("俯仰角: " + df.format(pitch * 180 / Math.PI));
