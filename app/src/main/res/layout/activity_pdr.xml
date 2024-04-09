@@ -59,11 +59,11 @@
 
     <TextView
         android:id="@+id/attText1"
-        android:layout_width="120dp"
+        android:layout_width="140dp"
         android:layout_height="25dp"
         android:layout_marginStart="40dp"
         android:layout_marginTop="10dp"
-        android:layout_marginEnd="220dp"
+        android:layout_marginEnd="200dp"
         android:textSize="8pt"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -71,11 +71,11 @@
 
     <TextView
         android:id="@+id/attText2"
-        android:layout_width="120dp"
+        android:layout_width="140dp"
         android:layout_height="25dp"
         android:layout_marginStart="40dp"
         android:layout_marginTop="5dp"
-        android:layout_marginEnd="220dp"
+        android:layout_marginEnd="200dp"
         android:textSize="8pt"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -83,11 +83,11 @@
 
     <TextView
         android:id="@+id/attText3"
-        android:layout_width="120dp"
+        android:layout_width="140dp"
         android:layout_height="30dp"
         android:layout_marginStart="40dp"
         android:layout_marginTop="5dp"
-        android:layout_marginEnd="220dp"
+        android:layout_marginEnd="200dp"
         android:textSize="8pt"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -95,11 +95,11 @@
 
     <TextView
         android:id="@+id/stepNumber"
-        android:layout_width="120dp"
+        android:layout_width="140dp"
         android:layout_height="25dp"
         android:layout_marginStart="40dp"
         android:layout_marginTop="5dp"
-        android:layout_marginEnd="220dp"
+        android:layout_marginEnd="200dp"
         android:textSize="8pt"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"

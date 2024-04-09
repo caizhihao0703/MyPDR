@@ -1,13 +1,15 @@
 package com.example.mypdr;
 
 import android.content.*;
+import android.content.pm.PackageManager;
 import android.hardware.*;
 import android.os.*;
 import android.view.View;
 import android.widget.*;
 import android.location.*;
-
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import android.Manifest;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -58,6 +60,8 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
     double[] Quat = new double[4];
     double q0, q1, q2, q3;
     double[] eInt = new double[3];
+    Geocoder geocoder;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -87,6 +91,13 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         dateFormat = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss EEEE", Locale.getDefault());
         // 定时更新系统时间
         timehandler.postDelayed(updateTimeTask, 1000);
+
+        locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[] {Manifest.permission.ACCESS_FINE_LOCATION}, 1);
+        } else {
+            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000, 1, mLocationListener);
+        }
 
         sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
         acc = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
@@ -119,6 +130,37 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
             startActivity(intent);
         });
     }
+
+    private final LocationListener mLocationListener = new LocationListener() {
+        @Override
+        public void onLocationChanged(Location location) {
+            double latitude = location.getLatitude();
+            double longitude = location.getLongitude();
+
+            lat.setText("纬度: "+String.format("%.4f",latitude)+"°");
+            lon.setText("经度: "+String.format("%.4f",longitude)+"°");
+
+            try {
+                Geocoder geocoder = new Geocoder(getApplicationContext(), Locale.getDefault());
+                List<Address> addresses = geocoder.getFromLocation(latitude, longitude, 1);
+                if (addresses.size() > 0) {
+                    String address = addresses.get(0).getAddressLine(0);
+                    nowAddress.setText("位置: "+address);
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        @Override
+        public void onStatusChanged(String s, int i, Bundle bundle) { }
+
+        @Override
+        public void onProviderEnabled(String s) { }
+
+        @Override
+        public void onProviderDisabled(String s) { }
+    };
 
     private void startRecording() {
         isRecording = true;
@@ -200,15 +242,15 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
             } else if (havegyrdata && havestartheading) {
                 updateHeading6(GYROtimeGap * 27 / 80.0);
             }
-//            if (realTimeGetStep2((float) Math.sqrt(accData[0] * accData[0] + accData[1] * accData[1] + accData[2] * accData[2]), secondToNow)) {
-//                stepNumber += 1;
-//                textStep.setText("步数: " + stepNumber);
-//                float meter = (float) (0.4 * Math.pow((float) (maxAcc2 - minAcc2), 1f / 4f));
-//                p.draw((float) heading, meter);
-//                totalDistance += meter;
-//                DecimalFormat df = new DecimalFormat("#0.00000");
-//                textDist.setText("移动距离: " + df.format(totalDistance) + "m");
-//            }
+            if (realTimeGetStep2((float) Math.sqrt(accData[0] * accData[0] + accData[1] * accData[1] + accData[2] * accData[2]), secondToNow)) {
+                stepNumber += 1;
+                textStep.setText("步数: " + stepNumber);
+                float meter = (float) (0.4 * Math.pow((float) (maxAcc2 - minAcc2), 1f / 4f));
+                p.draw((float) heading, meter);
+                totalDistance += meter;
+                DecimalFormat df = new DecimalFormat("#0.00000");
+                textDist.setText("移动距离: " + df.format(totalDistance) + "m");
+            }
         }
 
     }
@@ -253,7 +295,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         mx = magData[1] * Math.cos(pitch) + magData[0] * Math.sin(roll) * Math.sin(pitch) + (-magData[2]) * Math.cos(roll) * Math.sin(pitch);
         my = magData[0] * Math.cos(roll) - (-magData[2]) * Math.sin(roll);
         PsiD = -Math.atan2(my, mx);
-        startHeading = PsiD + 9 * Math.PI / 180.0;
+        startHeading = PsiD + 9.9 * Math.PI / 180.0;
         heading = startHeading;
 
         Quat[0] = Math.cos(startHeading / 2) * Math.cos(pitch / 2) * Math.cos(roll / 2)
@@ -269,9 +311,9 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         q2 = Quat[2];
         q3 = Quat[3];
         DecimalFormat df = new DecimalFormat("#0.0000");
-        t1.setText("横滚角: " + df.format(roll * 180 / Math.PI));
-        t2.setText("俯仰角: " + df.format(pitch * 180 / Math.PI));
-        t3.setText("航向角: " + df.format(heading * 180 / Math.PI));
+        t1.setText("横滚角: " + df.format(roll * 180 / Math.PI) + "°");
+        t2.setText("俯仰角: " + df.format(pitch * 180 / Math.PI) + "°");
+        t3.setText("航向角: " + df.format(heading * 180 / Math.PI) + "°");
     }
 
     public void updateHeading6(double timeGap) {
@@ -329,17 +371,17 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
 
         pitch = Math.atan2(2 * (q2 * q3 + q0 * q1), 1 - 2 * (q1 * q1 + q2 * q2));
         roll = Math.asin(2 * (q0 * q2 - q1 * q3));
-        heading = -Math.atan2(2 * (q1 * q2 + q0 * q3), 1 - 2 * (q2 * q2 + q3 * q3)) + Math.PI*2;
+        heading = -Math.atan2(2 * (q1 * q2 + q0 * q3), 1 - 2 * (q2 * q2 + q3 * q3)) + Math.PI * 2;
         if (heading > Math.PI)
             heading -= Math.PI * 2;
         else if (heading < -Math.PI)
             heading += Math.PI * 2;
 
 
-        DecimalFormat df = new DecimalFormat("#0.0000");
-        t1.setText("横滚角: " + df.format(roll * 180 / Math.PI));
-        t2.setText("俯仰角: " + df.format(pitch * 180 / Math.PI));
-        t3.setText("航向角: " + df.format(heading * 180 / Math.PI));
+        DecimalFormat df = new DecimalFormat("#0.000000");
+        t1.setText("横滚角: " + df.format(roll * 180 / Math.PI) + "°");
+        t2.setText("俯仰角: " + df.format(pitch * 180 / Math.PI) + "°");
+        t3.setText("航向角: " + df.format(heading * 180 / Math.PI) + "°");
     }
 
     public void updateHeading9(double timeGap) {
@@ -430,7 +472,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         heading = -Math.atan2(2 * (q1 * q2 + q0 * q3), 1 - 2 * (q2 * q2 + q3 * q3));
 
 
-        DecimalFormat df = new DecimalFormat("#0.0000");
+        DecimalFormat df = new DecimalFormat("#0.000000");
         t1.setText("横滚角: " + df.format(roll * 180 / Math.PI));
         t2.setText("俯仰角: " + df.format(pitch * 180 / Math.PI));
         t3.setText("航向角: " + df.format(heading * 180 / Math.PI));
