@@ -198,7 +198,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
                 getStartHeading();
                 iter++;
             } else if (havegyrdata && havestartheading) {
-                updateHeading(GYROtimeGap / 2);
+                updateHeading6(GYROtimeGap * 27 / 80.0);
             }
 //            if (realTimeGetStep2((float) Math.sqrt(accData[0] * accData[0] + accData[1] * accData[1] + accData[2] * accData[2]), secondToNow)) {
 //                stepNumber += 1;
@@ -253,7 +253,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         mx = magData[1] * Math.cos(pitch) + magData[0] * Math.sin(roll) * Math.sin(pitch) + (-magData[2]) * Math.cos(roll) * Math.sin(pitch);
         my = magData[0] * Math.cos(roll) - (-magData[2]) * Math.sin(roll);
         PsiD = -Math.atan2(my, mx);
-        startHeading = PsiD;
+        startHeading = PsiD + 9 * Math.PI / 180.0;
         heading = startHeading;
 
         Quat[0] = Math.cos(startHeading / 2) * Math.cos(pitch / 2) * Math.cos(roll / 2)
@@ -274,7 +274,75 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         t3.setText("航向角: " + df.format(heading * 180 / Math.PI));
     }
 
-    public void updateHeading(double timeGap) {
+    public void updateHeading6(double timeGap) {
+        double Ki = 0.001, Kp = 1;
+        double ax = accData[0], ay = accData[1], az = accData[2];
+        double gx = gyrData[0], gy = gyrData[1], gz = gyrData[2];
+        double norm;
+        double vx, vy, vz;
+        double ex, ey, ez;
+        double q0q0 = q0 * q0;
+        double q0q1 = q0 * q1;
+        double q0q2 = q0 * q2;
+        double q1q3 = q1 * q3;
+        double q2q3 = q2 * q3;
+        double q3q3 = q3 * q3;
+
+        // 加速度计归一化
+        norm = Math.sqrt(ax * ax + ay * ay + az * az);
+        //if (norm == 0) return;
+        ax /= norm;
+        ay /= norm;
+        az /= norm;
+
+//        vx = 2 * (q1q3 - q0q2);
+//        vy = 2 * (q2q3 + q0q1);
+//        vz = q0q0 - 0.5 + q3q3;
+        vx = q1q3 - q0q2;
+        vy = q2q3 + q0q1;
+        vz = q0q0 - 0.5 + q3q3;
+
+        ex = (ay * vz - az * vy);
+        ey = (az * vx - ax * vz);
+        ez = (ax * vy - ay * vx);
+        eInt[0] += Ki * ex * timeGap;      // accumulate integral error
+        eInt[1] += Ki * ey * timeGap;
+        eInt[2] += Ki * ez * timeGap;
+
+        gx += Kp * ex + eInt[0];
+        gy += Kp * ey + eInt[1];
+        gz += Kp * ez + eInt[2];
+
+        double pa = q1;
+        double pb = q2;
+        double pc = q3;
+        q0 = q0 + (-q1 * gx - q2 * gy - q3 * gz) * (0.5 * timeGap);
+        q1 = pa + (q0 * gx + pb * gz - pc * gy) * (0.5 * timeGap);
+        q2 = pb + (q0 * gy - pa * gz + pc * gx) * (0.5 * timeGap);
+        q3 = pc + (q0 * gz + pa * gy - pb * gx) * (0.5 * timeGap);
+
+        norm = Math.sqrt(q0 * q0 + q1 * q1 + q2 * q2 + q3 * q3);
+        q0 /= norm;
+        q1 /= norm;
+        q2 /= norm;
+        q3 /= norm;
+
+        pitch = Math.atan2(2 * (q2 * q3 + q0 * q1), 1 - 2 * (q1 * q1 + q2 * q2));
+        roll = Math.asin(2 * (q0 * q2 - q1 * q3));
+        heading = -Math.atan2(2 * (q1 * q2 + q0 * q3), 1 - 2 * (q2 * q2 + q3 * q3)) + Math.PI*2;
+        if (heading > Math.PI)
+            heading -= Math.PI * 2;
+        else if (heading < -Math.PI)
+            heading += Math.PI * 2;
+
+
+        DecimalFormat df = new DecimalFormat("#0.0000");
+        t1.setText("横滚角: " + df.format(roll * 180 / Math.PI));
+        t2.setText("俯仰角: " + df.format(pitch * 180 / Math.PI));
+        t3.setText("航向角: " + df.format(heading * 180 / Math.PI));
+    }
+
+    public void updateHeading9(double timeGap) {
 //        //航向角
 //        //方向右前上
 //        pitch = Math.atan2(accData[1], Math.sqrt(accData[0] * accData[0] + accData[2] * accData[2]));
@@ -319,29 +387,29 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         my /= norm;
         mz /= norm;
 
-        vx = 2 * (q1q3 - q0q2);
-        vy = 2 * (q2q3 + q0q1);
-        vz = q0q0 - q1q1 - q2q2 + q3q3;
+        vx = q1q3 - q0q2;
+        vy = q2q3 + q0q1;
+        vz = q0q0 - 0.5 + q3q3;
 
         hx = 2 * mx * (0.5 - q2q2 - q3q3) + 2 * my * (q1q2 - q0q3) + 2 * mz * (q1q3 + q0q2);
         hy = 2 * mx * (q1q2 + q0q3) + 2 * my * (0.5 - q1q1 - q3q3) + 2 * mz * (q2q3 - q0q1);
         hz = 2 * mx * (q1q3 - q0q2) + 2 * my * (q2q3 + q0q1) + 2f * mz * (0.5 - q1q1 - q2q2);
         bx = Math.sqrt((hx * hx) + (hy * hy));
         bz = hz;
-        wx = 2 * bx * (0.5 - q2q2 - q3q3) + 2 * bz * (q1q3 - q0q2);
-        wy = 2 * bx * (q1q2 - q0q3) + 2 * bz * (q0q1 + q2q3);
-        wz = 2 * bx * (q0q2 + q1q3) + 2 * bz * (0.5 - q1q1 - q2q2);
+        wx = bx * (0.5 - q2q2 - q3q3) + bz * (q1q3 - q0q2);
+        wy = bx * (q1q2 - q0q3) + bz * (q0q1 + q2q3);
+        wz = bx * (q0q2 + q1q3) + bz * (0.5 - q1q1 - q2q2);
 
         ex = (ay * vz - az * vy) + (my * wz - mz * wy);
         ey = (az * vx - ax * vz) + (mz * wx - mx * wz);
         ez = (ax * vy - ay * vx) + (mx * wy - my * wx);
-        eInt[0] += ex * timeGap;      // accumulate integral error
-        eInt[1] += ey * timeGap;
-        eInt[2] += ez * timeGap;
+        eInt[0] += Ki * ex * timeGap;      // accumulate integral error
+        eInt[1] += Ki * ey * timeGap;
+        eInt[2] += Ki * ez * timeGap;
 
-        gx = gx + Kp * ex + Ki * eInt[0];
-        gy = gy + Kp * ey + Ki * eInt[1];
-        gz = gz + Kp * ez + Ki * eInt[2];
+        gx += Kp * ex + Ki * eInt[0];
+        gy += Kp * ey + Ki * eInt[1];
+        gz += Kp * ez + Ki * eInt[2];
 
         double pa = q1;
         double pb = q2;
@@ -359,7 +427,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
 
         pitch = Math.atan2(2 * (q2 * q3 + q0 * q1), 1 - 2 * (q1 * q1 + q2 * q2));
         roll = Math.asin(2 * (q0 * q2 - q1 * q3));
-        heading = Math.atan2(2 * (q1 * q2 + q0 * q3), 1 - 2 * (q2 * q2 + q3 * q3));
+        heading = -Math.atan2(2 * (q1 * q2 + q0 * q3), 1 - 2 * (q2 * q2 + q3 * q3));
 
 
         DecimalFormat df = new DecimalFormat("#0.0000");
