@@ -4,10 +4,12 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <com.baidu.mapapi.map.MapView
-        android:id="@+id/bmapView"
+    <org.osmdroid.views.MapView
+        android:id="@+id/osmMapView"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="match_parent"
+        tools:layout_editor_absoluteX="33dp"
+        tools:layout_editor_absoluteY="43dp"/>
 
 
 
