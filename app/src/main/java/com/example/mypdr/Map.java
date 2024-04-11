@@ -14,25 +14,25 @@ public class Map extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_baidumap);
+        setContentView(R.layout.activity_osmmap);
 
-        //虚拟机调试
-        mapView = findViewById(R.id.osmMapView);
-        mapView.setMultiTouchControls(true);
-        WMSTileSource wmsTileSource = new WMSTileSource( "OGC:WMS", new String[]{"http://202.114.122.22:2107/geoserver/whuXX/wms?service=WMS"},"whuXX:basemap","1.1.1","EPSG:900913","",256 );
-        mapView.setTileSource(wmsTileSource);
-        mapView.getController().setCenter(new GeoPoint(30.538,114.3618));
-        mapView.setMinZoomLevel(15.0);
-        mapView.setMaxZoomLevel(20.0);
-        mapView.getController().setZoom(15.0);
-
-//        // 华为手机调试
-//        Configuration.getInstance().setUserAgentValue(getPackageName());
+//        //虚拟机调试
 //        mapView = findViewById(R.id.osmMapView);
-//        mapView.setTileSource(TileSourceFactory.MAPNIK);
 //        mapView.setMultiTouchControls(true);
-//        mapView.getController().setCenter(new GeoPoint(30.538, 114.3618));
+//        WMSTileSource wmsTileSource = new WMSTileSource( "OGC:WMS", new String[]{"http://202.114.122.22:2107/geoserver/whuXX/wms?service=WMS"},"whuXX:basemap","1.1.1","EPSG:900913","",256 );
+//        mapView.setTileSource(wmsTileSource);
+//        mapView.getController().setCenter(new GeoPoint(30.538,114.3618));
+//        mapView.setMinZoomLevel(15.0);
+//        mapView.setMaxZoomLevel(20.0);
 //        mapView.getController().setZoom(15.0);
+
+        // 华为手机调试
+        Configuration.getInstance().setUserAgentValue(getPackageName());
+        mapView = findViewById(R.id.osmMapView);
+        mapView.setTileSource(TileSourceFactory.MAPNIK);
+        mapView.setMultiTouchControls(true);
+        mapView.getController().setCenter(new GeoPoint(30.538, 114.3618));
+        mapView.getController().setZoom(15.0);
 
     }
     @Override

@@ -43,6 +43,9 @@ dependencies {
     implementation files('libs/BaiduLBS_Android.jar')
     implementation("org.osmdroid:osmdroid-android:6.1.18")
     implementation("org.osmdroid:osmdroid-wms:6.1.18")
+    implementation 'com.github.PhilJay:MPAndroidChart:v3.0.2'
+
+
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'

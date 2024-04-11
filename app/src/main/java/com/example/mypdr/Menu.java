@@ -6,6 +6,7 @@ import androidx.core.app.ActivityCompat;
 import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.hardware.SensorEvent;
 import android.os.Build;
 import android.os.Bundle;
 import android.widget.Button;
@@ -36,7 +37,7 @@ public class Menu extends AppCompatActivity {
 
         Button collectdata = findViewById(R.id.collectData);
         collectdata.setOnClickListener(v -> {
-            Intent intent = new Intent(Menu.this, PDRData.class);
+            Intent intent = new Intent(Menu.this, SensorView.class);
             startActivity(intent);
         });
 
