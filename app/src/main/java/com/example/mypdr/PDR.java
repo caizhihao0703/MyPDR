@@ -7,8 +7,10 @@ import android.os.*;
 import android.view.View;
 import android.widget.*;
 import android.location.*;
+
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
+
 import android.Manifest;
 
 import java.io.*;
@@ -17,17 +19,6 @@ import java.text.*;
 import java.util.*;
 
 public class PDR extends AppCompatActivity implements SensorEventListener {
-    float yAccLimit = 9.8f, yAccBias = 2f;
-    int minNumberOfStep = 1;
-    private ArrayList<Float> RTyAcc = new ArrayList<Float>();
-    private ArrayList<Float> RTyAccPart = new ArrayList<Float>();
-    private ArrayList<Float> RTyAccTime = new ArrayList<Float>();
-    private ArrayList<Float> RTyAccForMax = new ArrayList<Float>();
-    private ArrayList<Float> RTyAccForMin = new ArrayList<Float>();
-    private float maxAcc, minAcc;
-    private boolean hasMax = false;
-    long secondToNow = 0;
-    long timeGap = 25;
     double[] accData = new double[3];
     double[] gyrData = new double[3];
     double[] magData = new double[3];
@@ -39,18 +30,14 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
     TextView nowAddress, lat, lon;
     PDRView p;
     int stepNumber = 0;
-    double stepLength = 0.5;
     private Handler timehandler;
     private SimpleDateFormat dateFormat;
     Button startPDR, showMap, showData;
-    static final int LOCATION_PERMISSION_REQUEST_CODE = 100;
     LocationManager locationManager;
     LocationListener locationListener;
     private double roll, pitch, heading, startHeading;
     private double mx, my;
-    private double omegaD, PsiD;
-    private double lastTime = 0;
-    private double lastOD = 0;
+    private double PsiD;
     double totalDistance = 0;
     int iter = 0;
     boolean isRecording = false; // 用于记录数据采集状态
@@ -60,8 +47,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
     double[] Quat = new double[4];
     double q0, q1, q2, q3;
     double[] eInt = new double[3];
-    Geocoder geocoder;
-
+    double height = Setting.H;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -94,7 +80,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
 
         locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[] {Manifest.permission.ACCESS_FINE_LOCATION}, 1);
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 1);
         } else {
             locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000, 1, mLocationListener);
         }
@@ -119,8 +105,6 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
                 new Handler().postDelayed(this::startRecording, 2000); // 延迟2秒
             }
         });
-
-
         showMap.setOnClickListener(v -> {
             Intent intent = new Intent(PDR.this, Map.class);
             startActivity(intent);
@@ -137,15 +121,15 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
             double latitude = location.getLatitude();
             double longitude = location.getLongitude();
 
-            lat.setText("纬度: "+String.format("%.4f",latitude)+"°");
-            lon.setText("经度: "+String.format("%.4f",longitude)+"°");
+            lat.setText("纬度: " + String.format("%.4f", latitude) + "°");
+            lon.setText("经度: " + String.format("%.4f", longitude) + "°");
 
             try {
                 Geocoder geocoder = new Geocoder(getApplicationContext(), Locale.getDefault());
                 List<Address> addresses = geocoder.getFromLocation(latitude, longitude, 1);
                 if (addresses.size() > 0) {
                     String address = addresses.get(0).getAddressLine(0);
-                    nowAddress.setText("位置: "+address);
+                    nowAddress.setText("位置: " + address);
                 }
             } catch (IOException e) {
                 e.printStackTrace();
@@ -153,13 +137,16 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         }
 
         @Override
-        public void onStatusChanged(String s, int i, Bundle bundle) { }
+        public void onStatusChanged(String s, int i, Bundle bundle) {
+        }
 
         @Override
-        public void onProviderEnabled(String s) { }
+        public void onProviderEnabled(String s) {
+        }
 
         @Override
-        public void onProviderDisabled(String s) { }
+        public void onProviderDisabled(String s) {
+        }
     };
 
     private void startRecording() {
@@ -192,7 +179,6 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
 
     @Override
     public void onSensorChanged(SensorEvent event) {
-
         if (isRecording) {
             try {
                 if (event.sensor == acc) {
@@ -241,18 +227,9 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
                 iter++;
             } else if (havegyrdata && havestartheading) {
                 updateHeading6(GYROtimeGap * 27 / 80.0);
-            }
-            if (realTimeGetStep2((float) Math.sqrt(accData[0] * accData[0] + accData[1] * accData[1] + accData[2] * accData[2]), secondToNow)) {
-                stepNumber += 1;
-                textStep.setText("步数: " + stepNumber);
-                float meter = (float) (0.4 * Math.pow((float) (maxAcc2 - minAcc2), 1f / 4f));
-                p.draw((float) heading, meter);
-                totalDistance += meter;
-                DecimalFormat df = new DecimalFormat("#0.00000");
-                textDist.setText("移动距离: " + df.format(totalDistance) + "m");
+                UpdatePosition();
             }
         }
-
     }
 
     @Override
@@ -381,18 +358,6 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
     }
 
     public void updateHeading9(double timeGap) {
-//        //航向角
-//        //方向右前上
-//        pitch = Math.atan2(accData[1], Math.sqrt(accData[0] * accData[0] + accData[2] * accData[2]));
-//        roll = Math.atan2(-accData[0], accData[2]);
-//
-//        omegaD = -Math.sin(pitch) * gyrData[1] + Math.sin(roll) * Math.cos(pitch) * gyrData[0] + Math.cos(roll) * Math.cos(pitch) * (-gyrData[2]);
-//        heading += omegaD * timeGap / 2.0;
-//        if (heading > Math.PI)
-//            heading -= Math.PI * 2;
-//        else if (heading < -Math.PI)
-//            heading += Math.PI * 2;
-
         double Ki = 0.001, Kp = 1;
         double ax = accData[0], ay = accData[1], az = accData[2];
         double mx = magData[0], my = magData[1], mz = magData[2];
@@ -474,119 +439,57 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         t3.setText("航向角: " + df.format(heading * 180 / Math.PI));
     }
 
-    public static float lastAcc = 99999f;
-    public static float disOfTopAndBottom = 4.5f;
-    private float lastTime2 = -9999;
-    public static float minTimeDis = 0.4f;
+    public void UpdatePosition() {
+        if (DetectStep(Math.sqrt(accData[0] * accData[0] + accData[1] * accData[1] + accData[2] * accData[2]), GYROtimeGap, lastGYROtime)) {
+            stepNumber += 1;
+
+            double Sf = 0;
+            float meter = (float) (0.7 * 0.371 * (height - 1.6) + 0.227 * (Sf - 1.79) * height / 1.6);
+            p.draw((float) heading, meter);
+
+            totalDistance += meter;
+            DecimalFormat df = new DecimalFormat("#0.00000");
+            textStep.setText("步数: " + stepNumber);
+            textDist.setText("移动距离: " + df.format(totalDistance) + "m");
+        }
+    }
+
+    public double lastAcc = 99999f;
+    public double disOfTopAndBottom = 4.5;
+    public double minTimeGap = 0.4;
     public boolean inMin = true;
     private boolean inMax = false;
-    private float maxAcc2 = -99999;
-    private float minAcc2 = 99999;
+    private double maxAcc2 = -99999;
+    private double minAcc2 = 99999;
 
-    public boolean realTimeGetStep2(float yAcc, float time) {
-        boolean boolToReturn = false;
-        if ((yAcc - lastAcc >= disOfTopAndBottom) && inMin) {
+    public boolean DetectStep(double acc, double time, double lasttime) {
+        boolean flag = false;
+        if ((acc - lastAcc >= disOfTopAndBottom) && inMin) {
             inMin = false;
             inMax = true;
             maxAcc2 = -99999;
         }
-        if ((yAcc - lastAcc <= -disOfTopAndBottom) && inMax) {
+        if ((acc - lastAcc <= -disOfTopAndBottom) && inMax) {
             inMin = true;
             inMax = false;
             minAcc2 = 99999;
-            if (time - lastTime2 >= minTimeDis * 1000) {
-                lastTime2 = time;
-                boolToReturn = true;
+            //探测到脚步
+            if (time - lasttime >= minTimeGap * 1000) {
+                flag = true;
             }
         }
         if (inMax) {
-            if (yAcc > maxAcc2) {
-                maxAcc2 = yAcc;
+            if (acc > maxAcc2) {
+                maxAcc2 = acc;
                 lastAcc = maxAcc2;
             }
         }
         if (inMin) {
-            if (yAcc < minAcc2) {
-                minAcc2 = yAcc;
+            if (acc < minAcc2) {
+                minAcc2 = acc;
                 lastAcc = minAcc2;
             }
         }
-        return boolToReturn;
-    }
-
-    private float lastMax = 0;
-
-    public boolean realTimeGetStep(float yAcc, float time) {
-        RTyAcc.add(yAcc);
-        if (yAcc > yAccLimit + yAccBias) {
-            RTyAccForMax.add(yAcc);
-            if (RTyAccForMin.size() <= minNumberOfStep) {
-                RTyAccForMin.clear();
-                return false;
-            } else if (hasMax) {
-                int index = 0;
-                float minAcc1 = 99999;
-                for (int i2 = 0; i2 < RTyAccForMin.size(); i2++) {
-                    if (RTyAccForMin.get(i2) > minAcc1) {
-                        minAcc1 = RTyAccForMin.get(i2);
-                        index = i2;
-                    }
-                }
-                minAcc = minAcc1;
-                hasMax = false;
-                RTyAccTime.add(time);
-                stepLength = 0.4 * Math.pow(maxAcc - minAcc, 1f / 4f);
-                return true;
-            }
-        } else if (yAcc < yAccLimit - yAccBias) {
-            RTyAccForMin.add(yAcc);
-            if (RTyAccForMax.size() <= minNumberOfStep) {
-                RTyAccForMax.clear();
-                return false;
-            }
-            int index = 0;
-            float maxAcc1 = -99999;
-            for (int i2 = 0; i2 < RTyAccForMax.size(); i2++) {
-                if (RTyAccForMax.get(i2) > maxAcc) {
-                    maxAcc1 = RTyAccForMax.get(i2);
-                    index = i2;
-                }
-            }
-            if (lastMax == 0)
-                lastMax = maxAcc1;
-            else yAccLimit += lastMax - maxAcc1;
-            maxAcc = maxAcc1;
-            hasMax = true;
-        }
-        return false;
-    }
-
-    public ArrayList<Integer> getStep(ArrayList<Float> yAcc) {
-        ArrayList<Integer> step = new ArrayList<Integer>();
-        ArrayList<Float> accArray = new ArrayList<Float>();
-        for (int i = 0; i < yAcc.size(); i++) {
-            if (yAcc.get(i) > yAccLimit) {
-                accArray.add(yAcc.get(i));
-                continue;
-            }
-            if (yAcc.get(i) < yAccLimit) {
-                if (accArray.size() <= 3) {
-                    accArray.clear();
-                    continue;
-                }
-
-                int index = 0;
-                float maxAcc = -99999;
-                for (int i2 = 0; i2 < accArray.size(); i2++) {
-                    if (accArray.get(i2) > maxAcc) {
-                        maxAcc = accArray.get(i2);
-                        index = i2;
-                    }
-                }
-                step.add(index + i);
-                accArray.clear();
-            }
-        }
-        return step;
+        return flag;
     }
 }

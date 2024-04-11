@@ -28,7 +28,7 @@
         android:layout_marginTop="60dp"
         android:layout_marginEnd="20dp"
         android:textSize="10pt"
-        android:text="身高：100cm"
+        android:text="身高：140cm"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"/>

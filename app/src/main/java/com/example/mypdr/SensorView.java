@@ -1,4 +1,5 @@
 package com.example.mypdr;
+
 import android.graphics.Color;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
@@ -8,18 +9,21 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.widget.TextView;
+
 import androidx.appcompat.app.AppCompatActivity;
+
 import com.github.mikephil.charting.charts.LineChart;
 import com.github.mikephil.charting.components.Description;
 import com.github.mikephil.charting.data.Entry;
 import com.github.mikephil.charting.data.LineData;
 import com.github.mikephil.charting.data.LineDataSet;
 import com.github.mikephil.charting.interfaces.datasets.ILineDataSet;
+
 import java.util.ArrayList;
 import java.util.List;
 
 public class SensorView extends AppCompatActivity implements SensorEventListener {
-    private LineChart accChart,gyochart,magchart;
+    private LineChart accChart, gyochart, magchart;
     private SensorManager sensorManager;
     private Sensor accelerometerSensor, gyroscopeSensor, magneticSensor;
     private List<Entry> accxEntries = new ArrayList<>();
@@ -32,6 +36,7 @@ public class SensorView extends AppCompatActivity implements SensorEventListener
     private List<Entry> magyEntries = new ArrayList<>();
     private List<Entry> magzEntries = new ArrayList<>();
     private Handler handler = new Handler(Looper.getMainLooper());
+    private long startTime;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -60,6 +65,7 @@ public class SensorView extends AppCompatActivity implements SensorEventListener
         sensorManager.registerListener(this, accelerometerSensor, SensorManager.SENSOR_DELAY_NORMAL);
         sensorManager.registerListener(this, gyroscopeSensor, SensorManager.SENSOR_DELAY_NORMAL);
         sensorManager.registerListener(this, magneticSensor, SensorManager.SENSOR_DELAY_NORMAL);
+        startTime = System.currentTimeMillis();
     }
 
     @Override
@@ -68,28 +74,28 @@ public class SensorView extends AppCompatActivity implements SensorEventListener
             float x = event.values[0];
             float y = event.values[1];
             float z = event.values[2];
-
-            accxEntries.add(new Entry(accxEntries.size(), x));
-            accyEntries.add(new Entry(accyEntries.size(), y));
-            acczEntries.add(new Entry(accxEntries.size(), z));
+            float timeElapsed = (float) ((System.currentTimeMillis() - startTime) / 1000.0);
+            accxEntries.add(new Entry(timeElapsed, x)); // 使用时间戳差值作为横坐标
+            accyEntries.add(new Entry(timeElapsed, y));
+            acczEntries.add(new Entry(timeElapsed, z));
             updateChart(accChart, accxEntries, accyEntries, acczEntries, "加速度计");
         } else if (event.sensor.getType() == Sensor.TYPE_GYROSCOPE) {
             float x = event.values[0];
             float y = event.values[1];
             float z = event.values[2];
-
-            gyrxEntries.add(new Entry(gyrxEntries.size(), x));
-            gyryEntries.add(new Entry(gyryEntries.size(), y));
-            gyrzEntries.add(new Entry(gyrzEntries.size(), z));
+            float timeElapsed = (float) ((System.currentTimeMillis() - startTime) / 1000.0);
+            gyrxEntries.add(new Entry(timeElapsed, x));
+            gyryEntries.add(new Entry(timeElapsed, y));
+            gyrzEntries.add(new Entry(timeElapsed, z));
             updateChart(gyochart, gyrxEntries, gyryEntries, gyrzEntries, "陀螺仪");
         } else if (event.sensor.getType() == Sensor.TYPE_MAGNETIC_FIELD) {
             float x = event.values[0];
             float y = event.values[1];
             float z = event.values[2];
-
-            magxEntries.add(new Entry(magxEntries.size(), x));
-            magyEntries.add(new Entry(magyEntries.size(), y));
-            magzEntries.add(new Entry(magzEntries.size(), z));
+            float timeElapsed = (float) ((System.currentTimeMillis() - startTime) / 1000.0);
+            magxEntries.add(new Entry(timeElapsed, x));
+            magyEntries.add(new Entry(timeElapsed, y));
+            magzEntries.add(new Entry(timeElapsed, z));
             updateChart(magchart, magxEntries, magyEntries, magzEntries, "磁传感器");
         }
     }
@@ -98,13 +104,13 @@ public class SensorView extends AppCompatActivity implements SensorEventListener
         handler.post(new Runnable() {
             @Override
             public void run() {
-                LineDataSet xData = new LineDataSet(entriesX, label +"x");
+                LineDataSet xData = new LineDataSet(entriesX, label + "x");
                 xData.setColor(Color.RED);
                 xData.setCircleColor(Color.RED);
-                LineDataSet yData = new LineDataSet(entriesY, label +"y");
+                LineDataSet yData = new LineDataSet(entriesY, label + "y");
                 yData.setColor(Color.GREEN);
                 yData.setCircleColor(Color.GREEN);
-                LineDataSet zData = new LineDataSet(entriesZ, label +"z");
+                LineDataSet zData = new LineDataSet(entriesZ, label + "z");
                 zData.setColor(Color.BLUE);
                 zData.setCircleColor(Color.BLUE);
 

@@ -3,6 +3,7 @@ package com.example.mypdr;
 import android.os.Bundle;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.github.mikephil.charting.BuildConfig;
 import org.osmdroid.config.Configuration;
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory;
 import org.osmdroid.util.GeoPoint;
@@ -27,7 +28,7 @@ public class Map extends AppCompatActivity {
 //        mapView.getController().setZoom(15.0);
 
         // 华为手机调试
-        Configuration.getInstance().setUserAgentValue(getPackageName());
+        Configuration.getInstance().setUserAgentValue(BuildConfig.APPLICATION_ID);
         mapView = findViewById(R.id.osmMapView);
         mapView.setTileSource(TileSourceFactory.MAPNIK);
         mapView.setMultiTouchControls(true);

@@ -5,6 +5,7 @@ import android.os.Bundle;
 import android.view.View;
 
 import androidx.appcompat.app.AppCompatActivity;
+
 import android.widget.SeekBar;
 import android.widget.TextView;
 
@@ -13,6 +14,8 @@ public class Setting extends AppCompatActivity {
     SeekBar seekBar2;
     TextView textView1;
     TextView textView2;
+
+    public static int H = 180;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -27,9 +30,11 @@ public class Setting extends AppCompatActivity {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 // 更新TextView的数值
-                progress+=100;
-                textView1.setText("身高："+progress+"cm");
+                progress += 140;
+                H = progress;
+                textView1.setText("身高：" + progress + "cm");
             }
+
             @Override
             public void onStartTrackingTouch(SeekBar seekBar) {
                 // Your code here
@@ -44,9 +49,10 @@ public class Setting extends AppCompatActivity {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 // 更新TextView的数值
-                progress+=100;
-                textView2.setText("步长："+progress+"cm");
+                progress += 100;
+                textView2.setText("步长：" + progress + "cm");
             }
+
             @Override
             public void onStartTrackingTouch(SeekBar seekBar) {
                 // Your code here
