@@ -20,8 +20,13 @@ import java.util.*;
 
 public class PDR extends AppCompatActivity implements SensorEventListener {
     double[] accData = new double[3];
+    ArrayList<Double> accNormList = new ArrayList<>();
     double[] gyrData = new double[3];
     double[] magData = new double[3];
+    ArrayList<Double> stepTime = new ArrayList<>();
+
+    public double thread = 12;
+    public double minTimeGap = 1.0;
     boolean haveaccdata = false, havegyrdata = false, havemagdata = false, havestartheading = false;
     long startTime;
     double GYROtimeGap, lastGYROtime = 0;
@@ -48,6 +53,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
     double q0, q1, q2, q3;
     double[] eInt = new double[3];
     double height = Setting.H;
+    double dis = Setting.dis;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -186,6 +192,15 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
                     accData[0] = event.values[0];
                     accData[1] = event.values[1];
                     accData[2] = event.values[2];
+
+                    if (accNormList.size() == 3) accNormList.remove(0);
+                    accNormList.add(Math.sqrt(accData[0] * accData[0] + accData[1] * accData[1] + accData[2] * accData[2]));
+                    if (accNormList.size() == 3) {
+                        if (DetectStep(accNormList)) {
+                            UpdatePosition(stepTime);
+                        }
+                    }
+
                     double timeElapsed = (System.currentTimeMillis() - startTime) / 1000.0;
                     String s = "acc," + String.format("%.3f,", timeElapsed);
                     s += String.format("%.6f,", accData[0]);
@@ -227,7 +242,6 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
                 iter++;
             } else if (havegyrdata && havestartheading) {
                 updateHeading6(GYROtimeGap * 27 / 80.0);
-                UpdatePosition();
             }
         }
     }
@@ -439,57 +453,56 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         t3.setText("航向角: " + df.format(heading * 180 / Math.PI));
     }
 
-    public void UpdatePosition() {
-        if (DetectStep(Math.sqrt(accData[0] * accData[0] + accData[1] * accData[1] + accData[2] * accData[2]), GYROtimeGap, lastGYROtime)) {
-            stepNumber += 1;
+    public void UpdatePosition(ArrayList<Double> stepTime) {
+        stepNumber += 1;
 
-            double Sf = 0;
-            float meter = (float) (0.7 * 0.371 * (height - 1.6) + 0.227 * (Sf - 1.79) * height / 1.6);
-            p.draw((float) heading, meter);
-
-            totalDistance += meter;
-            DecimalFormat df = new DecimalFormat("#0.00000");
-            textStep.setText("步数: " + stepNumber);
-            textDist.setText("移动距离: " + df.format(totalDistance) + "m");
+        double Sf;
+        if (stepTime.size() < 3) {
+            Sf = 1;
         }
+        else{
+            Sf = 1 / (0.8 * (stepTime.get(2) - stepTime.get(1)) + 0.2 * (stepTime.get(1) - stepTime.get(0)));
+        }
+        float meter = (float) (0.7 * 0.371 * (height - 1.6) + 0.227 * (Sf - 1.79) * height / 1.6);
+        meter += dis;
+        p.draw((float) heading, meter / 10);
+
+        totalDistance += meter;
+        DecimalFormat df = new DecimalFormat("#0.00000");
+        textStep.setText("步数: " + stepNumber);
+        textDist.setText("移动距离: " + df.format(totalDistance) + "m");
     }
 
-    public double lastAcc = 99999f;
-    public double disOfTopAndBottom = 4.5;
-    public double minTimeGap = 0.4;
-    public boolean inMin = true;
-    private boolean inMax = false;
-    private double maxAcc2 = -99999;
-    private double minAcc2 = 99999;
-
-    public boolean DetectStep(double acc, double time, double lasttime) {
+    public boolean DetectStep(ArrayList<Double> Acc3Epoch) {
         boolean flag = false;
-        if ((acc - lastAcc >= disOfTopAndBottom) && inMin) {
-            inMin = false;
-            inMax = true;
-            maxAcc2 = -99999;
-        }
-        if ((acc - lastAcc <= -disOfTopAndBottom) && inMax) {
-            inMin = true;
-            inMax = false;
-            minAcc2 = 99999;
-            //探测到脚步
-            if (time - lasttime >= minTimeGap * 1000) {
+        double accNorm1, accNorm2, accNorm3;
+
+        accNorm1 = Acc3Epoch.get(0);
+        accNorm2 = Acc3Epoch.get(1);
+        accNorm3 = Acc3Epoch.get(2);
+        double lasttime = lastGYROtime;
+
+        if (accNorm2 > accNorm1 && accNorm2 > accNorm3 && accNorm2 >= thread) {
+            if (stepTime.size() == 3) {
+                stepTime.remove(0);
+            }
+            if (stepTime.size() == 0) {
+                stepTime.add(lasttime);
                 flag = true;
+            } else if (stepTime.size() == 1 && (lasttime - stepTime.get(0) > 0.4)) {
+                stepTime.add(lasttime);
+                flag = true;
+            } else if ((lasttime - stepTime.get(stepTime.size() - 1)) > 0.4) {
+                stepTime.add(lasttime);
+            }
+
+            if (stepTime.size() == 3) {
+                if ((stepTime.get(2) - stepTime.get(0)) > minTimeGap) {
+                    flag = true;
+                }
             }
         }
-        if (inMax) {
-            if (acc > maxAcc2) {
-                maxAcc2 = acc;
-                lastAcc = maxAcc2;
-            }
-        }
-        if (inMin) {
-            if (acc < minAcc2) {
-                minAcc2 = acc;
-                lastAcc = minAcc2;
-            }
-        }
+
         return flag;
     }
 }
