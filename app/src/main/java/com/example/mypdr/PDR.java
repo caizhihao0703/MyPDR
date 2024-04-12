@@ -126,12 +126,13 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
     private final LocationListener mLocationListener = new LocationListener() {
         @Override
         public void onLocationChanged(Location location) {
-            if(isFirstPos){
+            if (isFirstPos) {
+                isFirstPos = false;
+
                 latitude = location.getLatitude();
                 longitude = location.getLongitude();
                 lat.setText("纬度: " + String.format("%.8f", latitude) + "°");
                 lon.setText("经度: " + String.format("%.8f", longitude) + "°");
-                isFirstPos = false;
             }
 
             try {
