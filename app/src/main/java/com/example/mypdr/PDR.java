@@ -14,7 +14,6 @@ import androidx.core.app.ActivityCompat;
 import android.Manifest;
 
 import java.io.*;
-import java.nio.charset.StandardCharsets;
 import java.text.*;
 import java.util.*;
 
@@ -54,6 +53,9 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
     double[] eInt = new double[3];
     double height = Setting.H;
     double dis = Setting.dis;
+    double latitude = 0;
+    double longitude = 0;
+    boolean isFirstPos = true;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -124,11 +126,13 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
     private final LocationListener mLocationListener = new LocationListener() {
         @Override
         public void onLocationChanged(Location location) {
-            double latitude = location.getLatitude();
-            double longitude = location.getLongitude();
-
-            lat.setText("纬度: " + String.format("%.4f", latitude) + "°");
-            lon.setText("经度: " + String.format("%.4f", longitude) + "°");
+            if(isFirstPos){
+                latitude = location.getLatitude();
+                longitude = location.getLongitude();
+                lat.setText("纬度: " + String.format("%.8f", latitude) + "°");
+                lon.setText("经度: " + String.format("%.8f", longitude) + "°");
+                isFirstPos = false;
+            }
 
             try {
                 Geocoder geocoder = new Geocoder(getApplicationContext(), Locale.getDefault());
@@ -459,8 +463,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         double Sf;
         if (stepTime.size() < 3) {
             Sf = 1;
-        }
-        else{
+        } else {
             Sf = 1 / (0.8 * (stepTime.get(2) - stepTime.get(1)) + 0.2 * (stepTime.get(1) - stepTime.get(0)));
         }
         float meter = (float) (0.7 * 0.371 * (height - 1.6) + 0.227 * (Sf - 1.79) * height / 1.6);
@@ -471,6 +474,13 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         DecimalFormat df = new DecimalFormat("#0.00000");
         textStep.setText("步数: " + stepNumber);
         textDist.setText("移动距离: " + df.format(totalDistance) + "m");
+
+        double[] xy = CordTrans.BL2xy(latitude, longitude);
+        xy[0] += meter * Math.cos(heading);
+        xy[1] += meter * Math.sin(heading);
+        double[] BL = CordTrans.xytoBL(xy[0], xy[1], 114);
+        lat.setText("纬度: " + String.format("%.8f", BL[0]) + "°");
+        lon.setText("经度: " + String.format("%.8f", BL[1]) + "°");
     }
 
     public boolean DetectStep(ArrayList<Double> Acc3Epoch) {

@@ -154,9 +154,9 @@
 
     <TextView
         android:id="@+id/lat"
-        android:layout_width="120dp"
+        android:layout_width="140dp"
         android:layout_height="25dp"
-        android:layout_marginStart="200dp"
+        android:layout_marginStart="220dp"
         android:layout_marginTop="10dp"
         android:layout_marginEnd="40dp"
         android:textSize="8pt"
@@ -166,9 +166,9 @@
 
     <TextView
         android:id="@+id/lon"
-        android:layout_width="120dp"
+        android:layout_width="140dp"
         android:layout_height="25dp"
-        android:layout_marginStart="200dp"
+        android:layout_marginStart="220dp"
         android:layout_marginTop="5dp"
         android:layout_marginEnd="40dp"
         android:textSize="8pt"
