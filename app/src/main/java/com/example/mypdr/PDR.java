@@ -1,3 +1,4 @@
+
 package com.example.mypdr;
 
 import android.content.*;
@@ -18,10 +19,10 @@ import java.text.*;
 import java.util.*;
 
 public class PDR extends AppCompatActivity implements SensorEventListener {
-    double[] accData = new double[3];
+    float[] accData = new float[3];
     ArrayList<Double> accNormList = new ArrayList<>();
-    double[] gyrData = new double[3];
-    double[] magData = new double[3];
+    float[] gyrData = new float[3];
+    float[] magData = new float[3];
     ArrayList<Double> stepTime = new ArrayList<>();
 
     public double thread = 12;
@@ -29,7 +30,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
     boolean haveaccdata = false, havegyrdata = false, havemagdata = false, havestartheading = false;
     long startTime;
     double GYROtimeGap, lastGYROtime = 0;
-    TextView textStep, textDist;
+    TextView textStep, textDist, warning;
     TextView t1, t2, t3, textTime;
     TextView nowAddress, lat, lon;
     PDRView p;
@@ -39,7 +40,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
     Button startPDR, showMap, showData;
     LocationManager locationManager;
     LocationListener locationListener;
-    private double roll, pitch, heading, startHeading;
+    private double roll, pitch, heading, lastheading, startheading;
     private double mx, my;
     private double PsiD;
     double totalDistance = 0;
@@ -56,6 +57,8 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
     double latitude = 0;
     double longitude = 0;
     boolean isFirstPos = true;
+
+    boolean haveinitheading = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -80,6 +83,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         textDist.setText("移动距离: ");
         textTime = findViewById(R.id.pdrTime);
         p = findViewById(R.id.PDRView);
+        warning = findViewById(R.id.warning);
 
 
         timehandler = new Handler();
@@ -111,6 +115,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
                 showData.setEnabled(false);
                 startPDR.setText("Stop");
                 startPDR.setEnabled(false);
+                initHeading();
                 new Handler().postDelayed(this::startRecording, 2000); // 延迟2秒
             }
         });
@@ -161,13 +166,38 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         }
     };
 
+    private void adjustHeading() {
+        float[] rotationMatrix = new float[9];
+        float[] orientationAngles = new float[3];
+        SensorManager.getRotationMatrix(rotationMatrix, null, accData, magData);
+        SensorManager.getOrientation(rotationMatrix, orientationAngles);
+
+        startheading = orientationAngles[0];
+        if (startheading > Math.PI)
+            startheading -= Math.PI * 2;
+        else if (startheading < -Math.PI)
+            startheading += Math.PI * 2;
+        DecimalFormat df = new DecimalFormat("#0.0000");
+        t3.setText("航向角: " + df.format(startheading * 180 / Math.PI) + "°");
+    }
+
+    private void initHeading() {
+        sensorManager.registerListener(this, acc, SensorManager.SENSOR_DELAY_NORMAL);
+        sensorManager.registerListener(this, mag, SensorManager.SENSOR_DELAY_NORMAL);
+
+        haveinitheading = true;
+    }
+
     private void startRecording() {
         isRecording = true;
-        startPDR.setEnabled(true);
+        haveinitheading = false;
 
-        sensorManager.registerListener(this, acc, SensorManager.SENSOR_DELAY_GAME);
-        sensorManager.registerListener(this, gyr, SensorManager.SENSOR_DELAY_GAME);
-        sensorManager.registerListener(this, mag, SensorManager.SENSOR_DELAY_GAME);
+        startPDR.setEnabled(true);
+        sensorManager.unregisterListener(this);
+
+        sensorManager.registerListener(this, acc, SensorManager.SENSOR_DELAY_NORMAL);
+        sensorManager.registerListener(this, gyr, SensorManager.SENSOR_DELAY_NORMAL);
+        sensorManager.registerListener(this, mag, SensorManager.SENSOR_DELAY_NORMAL);
         startTime = System.currentTimeMillis();
         try {
             File file = new File(getExternalFilesDir(null), "pdrData.txt");
@@ -175,7 +205,6 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         } catch (IOException e) {
             e.printStackTrace();
         }
-
     }
 
     private void stopRecording() {
@@ -203,11 +232,20 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
                     accNormList.add(Math.sqrt(accData[0] * accData[0] + accData[1] * accData[1] + accData[2] * accData[2]));
                     if (accNormList.size() == 3) {
                         if (DetectStep(accNormList)) {
+                            warning.setText("");
+                            haveinitheading = false;
                             UpdatePosition(stepTime);
                         }
                     }
-
                     double timeElapsed = (System.currentTimeMillis() - startTime) / 1000.0;
+                    //脚步中断
+                    if (stepTime.size() > 0) {
+                        if ((timeElapsed - stepTime.get(stepTime.size() - 1)) > 3) {
+                            warning.setText("检测到脚步中止！");
+                            haveinitheading = true;
+                        }
+                    }
+
                     String s = "acc," + String.format("%.3f,", timeElapsed);
                     s += String.format("%.6f,", accData[0]);
                     s += String.format("%.6f,", accData[1]);
@@ -249,6 +287,15 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
             } else if (havegyrdata && havestartheading) {
                 updateHeading6(GYROtimeGap * 27 / 80.0);
             }
+        }
+
+        if (haveinitheading) {
+            if (event.sensor == acc) {
+                System.arraycopy(event.values, 0, accData, 0, event.values.length);
+            } else if (event.sensor == mag) {
+                System.arraycopy(event.values, 0, magData, 0, event.values.length);
+            }
+            adjustHeading();
         }
     }
 
@@ -292,17 +339,17 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         mx = magData[1] * Math.cos(pitch) + magData[0] * Math.sin(roll) * Math.sin(pitch) + (-magData[2]) * Math.cos(roll) * Math.sin(pitch);
         my = magData[0] * Math.cos(roll) - (-magData[2]) * Math.sin(roll);
         PsiD = -Math.atan2(my, mx);
-        startHeading = PsiD + 9.9 * Math.PI / 180.0;
-        heading = startHeading;
+//        startHeading = PsiD + 9.9 * Math.PI / 180.0;
+        heading = startheading;
 
-        Quat[0] = Math.cos(startHeading / 2) * Math.cos(pitch / 2) * Math.cos(roll / 2)
-                + Math.sin(startHeading / 2) * Math.sin(pitch / 2) * Math.sin(roll / 2);
-        Quat[1] = Math.cos(startHeading / 2) * Math.cos(pitch / 2) * Math.sin(roll / 2)
-                - Math.sin(startHeading / 2) * Math.sin(pitch / 2) * Math.cos(roll / 2);
-        Quat[2] = Math.cos(startHeading / 2) * Math.sin(pitch / 2) * Math.cos(roll / 2)
-                + Math.sin(startHeading / 2) * Math.cos(pitch / 2) * Math.sin(roll / 2);
-        Quat[3] = Math.sin(startHeading / 2) * Math.cos(pitch / 2) * Math.cos(roll / 2)
-                - Math.cos(startHeading / 2) * Math.sin(pitch / 2) * Math.sin(roll / 2);
+        Quat[0] = Math.cos(heading / 2) * Math.cos(pitch / 2) * Math.cos(roll / 2)
+                + Math.sin(heading / 2) * Math.sin(pitch / 2) * Math.sin(roll / 2);
+        Quat[1] = Math.cos(heading / 2) * Math.cos(pitch / 2) * Math.sin(roll / 2)
+                - Math.sin(heading / 2) * Math.sin(pitch / 2) * Math.cos(roll / 2);
+        Quat[2] = Math.cos(heading / 2) * Math.sin(pitch / 2) * Math.cos(roll / 2)
+                + Math.sin(heading / 2) * Math.cos(pitch / 2) * Math.sin(roll / 2);
+        Quat[3] = Math.sin(heading / 2) * Math.cos(pitch / 2) * Math.cos(roll / 2)
+                - Math.cos(heading / 2) * Math.sin(pitch / 2) * Math.sin(roll / 2);
         q0 = Quat[0];
         q1 = Quat[1];
         q2 = Quat[2];
@@ -365,7 +412,11 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
 
         pitch = Math.atan2(2 * (q2 * q3 + q0 * q1), 1 - 2 * (q1 * q1 + q2 * q2));
         roll = Math.asin(2 * (q0 * q2 - q1 * q3));
-        heading = -Math.atan2(2 * (q1 * q2 + q0 * q3), 1 - 2 * (q2 * q2 + q3 * q3)) + Math.PI * 2;
+        heading = Math.atan2(2 * (q1 * q2 + q0 * q3), 1 - 2 * (q2 * q2 + q3 * q3));
+
+        double deltaheading = heading - startheading;
+        heading = startheading - deltaheading;
+
         if (heading > Math.PI)
             heading -= Math.PI * 2;
         else if (heading < -Math.PI)
@@ -450,8 +501,15 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
 
         pitch = Math.atan2(2 * (q2 * q3 + q0 * q1), 1 - 2 * (q1 * q1 + q2 * q2));
         roll = Math.asin(2 * (q0 * q2 - q1 * q3));
-        heading = -Math.atan2(2 * (q1 * q2 + q0 * q3), 1 - 2 * (q2 * q2 + q3 * q3));
+        heading = Math.atan2(2 * (q1 * q2 + q0 * q3), 1 - 2 * (q2 * q2 + q3 * q3));
 
+        double deltaheading = heading - startheading;
+        heading = startheading - deltaheading;
+
+        if (heading > Math.PI)
+            heading -= Math.PI * 2;
+        else if (heading < -Math.PI)
+            heading += Math.PI * 2;
 
         DecimalFormat df = new DecimalFormat("#0.000000");
         t1.setText("横滚角: " + df.format(roll * 180 / Math.PI));
@@ -468,8 +526,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         } else {
             Sf = 1 / (0.8 * (stepTime.get(2) - stepTime.get(1)) + 0.2 * (stepTime.get(1) - stepTime.get(0)));
         }
-        float meter = (float) (0.7 * 0.371 * (height - 1.6) + 0.227 * (Sf - 1.79) * height / 1.6);
-        meter += dis;
+        float meter = (float) (dis + 0.371 * (height - 1.6) + 0.227 * (Sf - 1.79) * height / 1.6);
         p.draw((float) heading, meter);
 
         totalDistance += meter;
@@ -513,6 +570,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
                     flag = true;
                 }
             }
+
         }
 
         return flag;

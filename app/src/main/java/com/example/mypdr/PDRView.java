@@ -58,8 +58,7 @@ public class PDRView extends View {
 
         drawGrid(canvas);
 
-
-        @SuppressLint("DrawAllocation") Paint p = new Paint();
+        Paint p = new Paint();
         p.setColor(Color.BLACK);
         p.setStyle(Paint.Style.STROKE);
         p.setStrokeWidth(10);

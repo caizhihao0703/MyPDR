@@ -15,8 +15,8 @@ public class Setting extends AppCompatActivity {
     TextView textView1;
     TextView textView2;
 
-    public static double H = 1.8;
-    public static double dis = 0.7;
+    public static float H = 1;
+    public static float dis = (float) 0.7;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -32,7 +32,7 @@ public class Setting extends AppCompatActivity {
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 // 更新TextView的数值
                 progress += 140;
-                H = progress / 100.0;
+                H = progress / 100;
                 textView1.setText("身高：" + progress + "cm");
             }
 

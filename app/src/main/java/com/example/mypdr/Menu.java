@@ -43,7 +43,7 @@ public class Menu extends AppCompatActivity {
 
         Button setting = findViewById(R.id.setting);
         setting.setOnClickListener(v -> {
-            Intent intent = new Intent(Menu.this, Setting.class);
+            Intent intent = new Intent(Menu.this, Ori.class);
             startActivity(intent);
         });
     }
