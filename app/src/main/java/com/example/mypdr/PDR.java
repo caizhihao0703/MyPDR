@@ -81,6 +81,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         textTime = findViewById(R.id.pdrTime);
         p = findViewById(R.id.PDRView);
 
+
         timehandler = new Handler();
         dateFormat = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss EEEE", Locale.getDefault());
         // 定时更新系统时间
@@ -469,7 +470,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         }
         float meter = (float) (0.7 * 0.371 * (height - 1.6) + 0.227 * (Sf - 1.79) * height / 1.6);
         meter += dis;
-        p.draw((float) heading, meter / 10);
+        p.draw((float) heading, meter);
 
         totalDistance += meter;
         DecimalFormat df = new DecimalFormat("#0.00000");

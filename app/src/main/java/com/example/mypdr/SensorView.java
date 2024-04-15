@@ -37,6 +37,7 @@ public class SensorView extends AppCompatActivity implements SensorEventListener
     private List<Entry> magzEntries = new ArrayList<>();
     private Handler handler = new Handler(Looper.getMainLooper());
     private long startTime;
+    private static final long MAX_DISPLAY_TIME_MS = 5000; // 10秒
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -75,27 +76,62 @@ public class SensorView extends AppCompatActivity implements SensorEventListener
             float y = event.values[1];
             float z = event.values[2];
             float timeElapsed = (float) ((System.currentTimeMillis() - startTime) / 1000.0);
-            accxEntries.add(new Entry(timeElapsed, x)); // 使用时间戳差值作为横坐标
-            accyEntries.add(new Entry(timeElapsed, y));
-            acczEntries.add(new Entry(timeElapsed, z));
+            // 添加数据时，判断时间范围，只保留最近一段时间内的数据
+            if (timeElapsed <= MAX_DISPLAY_TIME_MS / 1000) {
+                accxEntries.add(new Entry(timeElapsed, x));
+                accyEntries.add(new Entry(timeElapsed, y));
+                acczEntries.add(new Entry(timeElapsed, z));
+            } else {
+                // 移除过期的数据
+                accxEntries.remove(0);
+                accyEntries.remove(0);
+                acczEntries.remove(0);
+                accxEntries.add(new Entry(timeElapsed, x));
+                accyEntries.add(new Entry(timeElapsed, y));
+                acczEntries.add(new Entry(timeElapsed, z));
+            }
             updateChart(accChart, accxEntries, accyEntries, acczEntries, "加速度计");
         } else if (event.sensor.getType() == Sensor.TYPE_GYROSCOPE) {
             float x = event.values[0];
             float y = event.values[1];
             float z = event.values[2];
             float timeElapsed = (float) ((System.currentTimeMillis() - startTime) / 1000.0);
-            gyrxEntries.add(new Entry(timeElapsed, x));
-            gyryEntries.add(new Entry(timeElapsed, y));
-            gyrzEntries.add(new Entry(timeElapsed, z));
+
+            if (timeElapsed <= MAX_DISPLAY_TIME_MS / 1000) {
+                gyrxEntries.add(new Entry(timeElapsed, x));
+                gyryEntries.add(new Entry(timeElapsed, y));
+                gyrzEntries.add(new Entry(timeElapsed, z));
+            } else {
+                // 移除过期的数据
+                gyrxEntries.remove(0);
+                gyryEntries.remove(0);
+                gyrzEntries.remove(0);
+                gyrxEntries.add(new Entry(timeElapsed, x));
+                gyryEntries.add(new Entry(timeElapsed, y));
+                gyrzEntries.add(new Entry(timeElapsed, z));
+            }
+
             updateChart(gyochart, gyrxEntries, gyryEntries, gyrzEntries, "陀螺仪");
         } else if (event.sensor.getType() == Sensor.TYPE_MAGNETIC_FIELD) {
             float x = event.values[0];
             float y = event.values[1];
             float z = event.values[2];
             float timeElapsed = (float) ((System.currentTimeMillis() - startTime) / 1000.0);
-            magxEntries.add(new Entry(timeElapsed, x));
-            magyEntries.add(new Entry(timeElapsed, y));
-            magzEntries.add(new Entry(timeElapsed, z));
+
+            if (timeElapsed <= MAX_DISPLAY_TIME_MS / 1000) {
+                magxEntries.add(new Entry(timeElapsed, x));
+                magyEntries.add(new Entry(timeElapsed, y));
+                magzEntries.add(new Entry(timeElapsed, z));
+            } else {
+                // 移除过期的数据
+                magxEntries.remove(0);
+                magyEntries.remove(0);
+                magzEntries.remove(0);
+                magxEntries.add(new Entry(timeElapsed, x));
+                magyEntries.add(new Entry(timeElapsed, y));
+                magzEntries.add(new Entry(timeElapsed, z));
+            }
+
             updateChart(magchart, magxEntries, magyEntries, magzEntries, "磁传感器");
         }
     }

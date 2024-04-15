@@ -29,7 +29,6 @@ public class PDRView extends View {
 
     public PDRView(Context context) {
         super(context);
-
     }
 
     public PDRView(Context context, AttributeSet attrs) {
@@ -57,6 +56,64 @@ public class PDRView extends View {
         canvas.rotate(-90);
         canvas.translate(-height, 0);
 
+        drawGrid(canvas);
+
+
+        @SuppressLint("DrawAllocation") Paint p = new Paint();
+        p.setColor(Color.BLACK);
+        p.setStyle(Paint.Style.STROKE);
+        p.setStrokeWidth(10);
+
+        double endX = startXNow + stepLength * Math.cos(yaw);
+        double endY = startYNow + stepLength * Math.sin(yaw);
+
+        X.add((float)endX);
+        Y.add((float)endY);
+
+        float maxX = Collections.max(X);
+        float maxY = Collections.max(Y);
+        float minX = Collections.min(X);
+        float minY = Collections.min(Y);
+
+        float max, min;
+        max = Math.max(maxX, maxY);
+        min = Math.min(minX, minY);
+
+        for (int i = 0; i < X.size(); i++) {
+            float XD = 200+getWidth()/(max-min)*(X.get(i)-min)/2;
+            float YD = 200+getHeight()/(max-min)*(Y.get(i)-min)/2;
+            XForDraw.add(XD);
+            YForDraw.add(YD);
+        }
+
+        maxX = Collections.max(XForDraw);
+        maxY = Collections.max(YForDraw);
+        minX = Collections.min(XForDraw);
+        minY = Collections.min(YForDraw);
+        float average;
+        average = (maxY + minY) / 2;
+        for (int i = 0; i < X.size(); i++) {
+            YForDraw.set(i, YForDraw.get(i)+getHeight()/2-average);
+        }
+
+        average = (maxX + minX) / 2;
+        for (int i = 0; i < X.size(); i++) {
+            XForDraw.set(i, XForDraw.get(i)+getWidth()/2-average);
+        }
+
+        for (int i = 0; i < XForDraw.size() - 1; i++) {
+            canvas.drawLine(XForDraw.get(i), YForDraw.get(i), XForDraw.get(i+1), YForDraw.get(i+1), p);
+        }
+
+        startXNow = (float)endX;
+        startYNow = (float)endY;
+        XForDraw.clear();
+        YForDraw.clear();
+
+        canvas.save();
+    }
+
+    public void drawGrid(Canvas canvas){
         canvas.drawColor(Color.WHITE);
         Paint paint = new Paint();
         paint.setColor(Color.BLACK);
@@ -72,68 +129,13 @@ public class PDRView extends View {
         for (int i = 0; i < getHeight(); i += gridSize) {
             canvas.drawLine(0, i, getWidth(), i, paint);
         }
-
-        @SuppressLint("DrawAllocation") Paint p = new Paint();
-        p.setColor(Color.BLACK);
-        p.setStyle(Paint.Style.STROKE);
-        p.setStrokeWidth(10);
-
-        double endX = startXNow + stepLength * Math.cos(yaw)*0.25;
-        double endY = startYNow + stepLength * Math.sin(yaw)*0.25;
-
-        X.add((float)endX);
-        Y.add((float)endY);
-
-        float maxX = Collections.max(X);
-        float maxY = Collections.max(Y);
-        float minX = Collections.min(X);
-        float minY = Collections.min(Y);
-
-        float max, min;
-        max = Math.max(maxX, maxY);
-        min = Math.min(minX, minY);
-
-        for (int i = 0; i < X.size(); i++) {
-            float XD = 200+(1000-100)/(max-min)*(X.get(i)-min);
-            float YD = 200+(1500-600)/(max-min)*(Y.get(i)-min);
-            XForDraw.add(XD);
-            YForDraw.add(YD);
-        }
-
-        maxX = Collections.max(XForDraw);
-        maxY = Collections.max(YForDraw);
-        minX = Collections.min(XForDraw);
-        minY = Collections.min(YForDraw);
-        float average;
-        average = (maxY + minY) / 2;
-        for (int i = 0; i < X.size(); i++) {
-            YForDraw.set(i, YForDraw.get(i)+700-average);
-        }
-
-        average = (maxX + minX) / 2;
-        for (int i = 0; i < X.size(); i++) {
-            XForDraw.set(i, XForDraw.get(i)+500-average);
-        }
-
-        for (int i = 0; i < XForDraw.size() - 1; i++) {
-            canvas.drawLine(XForDraw.get(i), YForDraw.get(i), XForDraw.get(i+1), YForDraw.get(i+1), p);
-        }
-
-        startXNow = (float)endX;
-        startYNow = (float)endY;
-
-        XForDraw.clear();
-        YForDraw.clear();
-
-        canvas.save();
     }
 
-    public void draw(float heading, float length){
+    public void draw(float heading, float length) {
         startPDR = true;
         yaw = heading;
         stepLength = length;
         invalidate();
     }
-
 
 }

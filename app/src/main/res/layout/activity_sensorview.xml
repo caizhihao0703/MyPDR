@@ -26,40 +26,4 @@
         android:layout_marginTop="30dp"
         app:layout_constraintTop_toBottomOf="@+id/gyoChart"/>
 
-<!--    <TextView-->
-<!--        android:id="@+id/textViewAccelerometer"-->
-<!--        android:layout_width="340dp"-->
-<!--        android:layout_height="25dp"-->
-<!--        android:layout_marginStart="20dp"-->
-<!--        android:layout_marginTop="10dp"-->
-<!--        android:layout_marginEnd="30dp"-->
-<!--        app:layout_constraintEnd_toEndOf="parent"-->
-<!--        app:layout_constraintStart_toStartOf="parent"-->
-<!--        app:layout_constraintTop_toTopOf="parent"-->
-<!--        android:text="Accelerometer Data" />-->
-
-<!--    <TextView-->
-<!--        android:id="@+id/textViewGyroscope"-->
-<!--        android:layout_width="340dp"-->
-<!--        android:layout_height="25dp"-->
-<!--        android:layout_marginStart="20dp"-->
-<!--        android:layout_marginTop="10dp"-->
-<!--        android:layout_marginEnd="30dp"-->
-<!--        app:layout_constraintEnd_toEndOf="parent"-->
-<!--        app:layout_constraintStart_toStartOf="parent"-->
-<!--        android:text="Accelerometer Data"-->
-<!--        app:layout_constraintTop_toBottomOf="@+id/textViewAccelerometer"/>-->
-
-<!--    <TextView-->
-<!--        android:id="@+id/textViewMagnetic"-->
-<!--        android:layout_width="340dp"-->
-<!--        android:layout_height="25dp"-->
-<!--        android:layout_marginStart="20dp"-->
-<!--        android:layout_marginTop="10dp"-->
-<!--        android:layout_marginEnd="30dp"-->
-<!--        app:layout_constraintEnd_toEndOf="parent"-->
-<!--        app:layout_constraintStart_toStartOf="parent"-->
-<!--        android:text="Accelerometer Data"-->
-<!--        app:layout_constraintTop_toBottomOf="@+id/textViewGyroscope"/>-->
-
 </androidx.constraintlayout.widget.ConstraintLayout>

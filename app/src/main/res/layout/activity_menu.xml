@@ -17,6 +17,7 @@
         android:layout_marginEnd="20dp"
         android:text="PDR实时探测"
         android:textSize="20pt"
+        app:backgroundTint="@color/cadetblue"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
@@ -30,6 +31,7 @@
         android:layout_marginEnd="20dp"
         android:text="数据采集"
         android:textSize="10pt"
+        app:backgroundTint="@color/darkcyan"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
@@ -44,6 +46,7 @@
         android:layout_marginEnd="20dp"
         android:text="设置"
         android:textSize="10pt"
+        app:backgroundTint="@color/darkslategray"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
