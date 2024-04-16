@@ -19,20 +19,18 @@ import java.text.*;
 import java.util.*;
 
 public class PDR extends AppCompatActivity implements SensorEventListener {
-    private String textName;
     private float[] accData = new float[3];
     private ArrayList<Double> accNormList = new ArrayList<>();
     private float[] gyrData = new float[3];
     private float[] magData = new float[3];
     private ArrayList<Double> stepTime = new ArrayList<>();
-
-    private double thread = 12, minTimeGap = 1;
-    private boolean haveaccdata = false, havegyrdata = false, havemagdata = false;
+    private boolean haveaccdata = false;
+    private boolean havemagdata = false;
     private long startTime;
     private double GYROtimeGap, lastGYROtime = 0, timeElapsed = 0;
     private TextView textStep, textDist, warning, t1, t2, t3, textTime, nowAddress, lat, lon;
     private PDRView p;
-    private int stepNumber = 0, iter = 0;
+    private int stepNumber = 0;
     private Handler timehandler;
     private Button startPDR, showMap, postprocess;
     private LocationManager locationManager;
@@ -174,7 +172,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         //打开文件，文件名格式pdrData_年月日时分秒
         Date currentTime = new Date();
         SimpleDateFormat filenameFormat = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault());
-        textName = filenameFormat.format(currentTime);
+        String textName = filenameFormat.format(currentTime);
         //开始记录时间
         startTime = System.currentTimeMillis();
         try {
@@ -185,9 +183,9 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
             e.printStackTrace();
         }
 
-        sensorManager.registerListener(this, acc, SensorManager.SENSOR_DELAY_NORMAL);
-        sensorManager.registerListener(this, gyr, SensorManager.SENSOR_DELAY_NORMAL);
-        sensorManager.registerListener(this, mag, SensorManager.SENSOR_DELAY_NORMAL);
+        sensorManager.registerListener(this, acc, SensorManager.SENSOR_DELAY_GAME);
+        sensorManager.registerListener(this, gyr, SensorManager.SENSOR_DELAY_GAME);
+        sensorManager.registerListener(this, mag, SensorManager.SENSOR_DELAY_GAME);
 
 //        pitch = Math.atan2(accData[1], Math.sqrt(accData[0] * accData[0] + accData[2] * accData[2]));
 //        roll = Math.atan2(-accData[0], accData[2]);
@@ -214,7 +212,6 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
     public void onSensorChanged(SensorEvent event) {
         if (timeElapsed >= 2 && isInitinghead) {
             isInitinghead = false;
-            startheading = heading;//弧度
             Quat[0] = Math.cos(heading / 2) * Math.cos(pitch / 2) * Math.cos(roll / 2)
                     + Math.sin(heading / 2) * Math.sin(pitch / 2) * Math.sin(roll / 2);
             Quat[1] = Math.cos(heading / 2) * Math.cos(pitch / 2) * Math.sin(roll / 2)
@@ -272,7 +269,6 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
     }
 
     private void processGyrSensorData(SensorEvent event) {
-        havegyrdata = true;
         System.arraycopy(event.values, 0, gyrData, 0, event.values.length);
         try {
             writeSensorData("gyo", gyrData);
@@ -406,9 +402,9 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
 
     public void updateHeading9(double timeGap) {
         double Ki = 0.001, Kp = 1;
-        double ax = accData[0], ay = accData[1], az = accData[2];
-        double mx = magData[0], my = magData[1], mz = magData[2];
-        double gx = gyrData[0], gy = gyrData[1], gz = gyrData[2];
+        double ax = accData[1], ay = accData[0], az = -accData[2];
+        double mx = magData[1], my = magData[0], mz = -magData[2];
+        double gx = gyrData[1], gy = gyrData[0], gz = -gyrData[2];
         double norm;
         double vx, vy, vz;
         double wx, wy, wz;
@@ -437,29 +433,29 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         my /= norm;
         mz /= norm;
 
-        vx = q1q3 - q0q2;
-        vy = q2q3 + q0q1;
-        vz = q0q0 - 0.5 + q3q3;
+        vx = -2 * (q1q3 - q0q2);
+        vy = -2 * (q2q3 + q0q1);
+        vz = -(q0q0 - q1q1 - q2q2 + q3q3);
 
         hx = 2 * mx * (0.5 - q2q2 - q3q3) + 2 * my * (q1q2 - q0q3) + 2 * mz * (q1q3 + q0q2);
         hy = 2 * mx * (q1q2 + q0q3) + 2 * my * (0.5 - q1q1 - q3q3) + 2 * mz * (q2q3 - q0q1);
-        hz = 2 * mx * (q1q3 - q0q2) + 2 * my * (q2q3 + q0q1) + 2f * mz * (0.5 - q1q1 - q2q2);
+        hz = 2 * mx * (q1q3 - q0q2) + 2 * my * (q2q3 + q0q1) + 2 * mz * (0.5 - q1q1 - q2q2);
         bx = Math.sqrt((hx * hx) + (hy * hy));
         bz = hz;
-        wx = bx * (0.5 - q2q2 - q3q3) + bz * (q1q3 - q0q2);
-        wy = bx * (q1q2 - q0q3) + bz * (q0q1 + q2q3);
-        wz = bx * (q0q2 + q1q3) + bz * (0.5 - q1q1 - q2q2);
+        wx = 2 * bx * (0.5 - q2q2 - q3q3) + bz * (q1q3 - q0q2);
+        wy = 2 * bx * (q1q2 - q0q3) + bz * (q0q1 + q2q3);
+        wz = 2 * bx * (q0q2 + q1q3) + bz * (0.5 - q1q1 - q2q2);
 
         ex = (ay * vz - az * vy) + (my * wz - mz * wy);
         ey = (az * vx - ax * vz) + (mz * wx - mx * wz);
         ez = (ax * vy - ay * vx) + (mx * wy - my * wx);
-        eInt[0] += Ki * ex * timeGap;      // accumulate integral error
+        eInt[0] += Ki * ex * timeGap;
         eInt[1] += Ki * ey * timeGap;
         eInt[2] += Ki * ez * timeGap;
 
-        gx += Kp * ex + Ki * eInt[0];
-        gy += Kp * ey + Ki * eInt[1];
-        gz += Kp * ez + Ki * eInt[2];
+        gx += (Kp * ex + eInt[0]);
+        gy += (Kp * ey + eInt[1]);
+        gz += (Kp * ez + eInt[2]);
 
         double pa = q1;
         double pb = q2;
@@ -475,8 +471,8 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         q2 /= norm;
         q3 /= norm;
 
-        pitch = Math.atan2(2 * (q2 * q3 + q0 * q1), 1 - 2 * (q1 * q1 + q2 * q2));
-        roll = Math.asin(2 * (q0 * q2 - q1 * q3));
+        roll = Math.atan2(2 * (q2 * q3 + q0 * q1), 1 - 2 * (q1 * q1 + q2 * q2));
+        pitch = Math.asin(2 * (q0 * q2 - q1 * q3));
         heading = Math.atan2(2 * (q1 * q2 + q0 * q3), 1 - 2 * (q2 * q2 + q3 * q3));
 
         if (heading > Math.PI)
@@ -524,6 +520,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         accNorm3 = Acc3Epoch.get(2);
         double lasttime = lastGYROtime;
 
+        double thread = 12;
         if (accNorm2 > accNorm1 && accNorm2 > accNorm3 && accNorm2 >= thread) {
             if (stepTime.size() == 3) {
                 stepTime.remove(0);
@@ -539,6 +536,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
             }
 
             if (stepTime.size() == 3) {
+                double minTimeGap = 1;
                 if ((stepTime.get(2) - stepTime.get(0)) > minTimeGap) {
                     flag = true;
                 }
