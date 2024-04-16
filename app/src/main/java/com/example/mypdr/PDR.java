@@ -19,6 +19,7 @@ import java.text.*;
 import java.util.*;
 
 public class PDR extends AppCompatActivity implements SensorEventListener {
+    String textName;
     float[] accData = new float[3];
     ArrayList<Double> accNormList = new ArrayList<>();
     float[] gyrData = new float[3];
@@ -36,15 +37,14 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
     PDRView p;
     int stepNumber = 0;
     private Handler timehandler;
-    private SimpleDateFormat dateFormat;
-    Button startPDR, showMap, showData;
+    Button startPDR, showMap, postprocess;
     LocationManager locationManager;
     LocationListener locationListener;
-    private double roll, pitch, heading, lastheading, startheading;
+    private double roll, pitch, heading, startheading;
     private double mx, my;
     private double PsiD;
     double totalDistance = 0;
-    int iter = 0;
+    int iter = 0, headiter = 0;
     boolean isRecording = false; // 用于记录数据采集状态
     SensorManager sensorManager;
     Sensor acc, gyr, mag;
@@ -58,7 +58,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
     double longitude = 0;
     boolean isFirstPos = true;
 
-    boolean haveinitheading = false;
+    boolean haveinitheading = false, reinitheading = true;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -87,7 +87,6 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
 
 
         timehandler = new Handler();
-        dateFormat = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss EEEE", Locale.getDefault());
         // 定时更新系统时间
         timehandler.postDelayed(updateTimeTask, 1000);
 
@@ -105,14 +104,14 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
 
         startPDR = findViewById(R.id.startPDR);
         showMap = findViewById(R.id.showMap);
-        showData = findViewById(R.id.showData);
+        postprocess = findViewById(R.id.postprocess);
         startPDR.setOnClickListener(v -> {
             if (isRecording) {
                 stopRecording();
-                showData.setEnabled(true);
+                postprocess.setEnabled(true);
             } else {
                 Toast.makeText(this, "请在界面上出现角度后开始走动", Toast.LENGTH_SHORT).show();
-                showData.setEnabled(false);
+                postprocess.setEnabled(false);
                 startPDR.setText("Stop");
                 startPDR.setEnabled(false);
                 initHeading();
@@ -123,7 +122,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
             Intent intent = new Intent(PDR.this, Map.class);
             startActivity(intent);
         });
-        showData.setOnClickListener(v -> {
+        postprocess.setOnClickListener(v -> {
             Intent intent = new Intent(PDR.this, PDRData.class);
             startActivity(intent);
         });
@@ -172,13 +171,14 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         SensorManager.getRotationMatrix(rotationMatrix, null, accData, magData);
         SensorManager.getOrientation(rotationMatrix, orientationAngles);
 
-        startheading = orientationAngles[0];
-        if (startheading > Math.PI)
-            startheading -= Math.PI * 2;
-        else if (startheading < -Math.PI)
-            startheading += Math.PI * 2;
+        heading = orientationAngles[0];
+        startheading = heading;
+        if (heading > Math.PI)
+            heading -= Math.PI * 2;
+        else if (heading < -Math.PI)
+            heading += Math.PI * 2;
         DecimalFormat df = new DecimalFormat("#0.0000");
-        t3.setText("航向角: " + df.format(startheading * 180 / Math.PI) + "°");
+        t3.setText("航向角: " + df.format(heading * 180 / Math.PI) + "°");
     }
 
     private void initHeading() {
@@ -186,6 +186,18 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         sensorManager.registerListener(this, mag, SensorManager.SENSOR_DELAY_NORMAL);
 
         haveinitheading = true;
+
+        Date currentTime = new Date();
+        SimpleDateFormat filenameFormat = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault());
+        textName = filenameFormat.format(currentTime);
+        startTime = System.currentTimeMillis();
+        try {
+            String fileName = "pdrData_" + textName + ".txt";
+            File file = new File(getExternalFilesDir(null), fileName);
+            outputStream = new FileOutputStream(file);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     private void startRecording() {
@@ -198,13 +210,6 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         sensorManager.registerListener(this, acc, SensorManager.SENSOR_DELAY_NORMAL);
         sensorManager.registerListener(this, gyr, SensorManager.SENSOR_DELAY_NORMAL);
         sensorManager.registerListener(this, mag, SensorManager.SENSOR_DELAY_NORMAL);
-        startTime = System.currentTimeMillis();
-        try {
-            File file = new File(getExternalFilesDir(null), "pdrData.txt");
-            outputStream = new FileOutputStream(file);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
     }
 
     private void stopRecording() {
@@ -234,6 +239,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
                         if (DetectStep(accNormList)) {
                             warning.setText("");
                             haveinitheading = false;
+                            if (reinitheading) getStartHeading();
                             UpdatePosition(stepTime);
                         }
                     }
@@ -246,11 +252,13 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
                         }
                     }
 
-                    String s = "acc," + String.format("%.3f,", timeElapsed);
-                    s += String.format("%.6f,", accData[0]);
-                    s += String.format("%.6f,", accData[1]);
-                    s += String.format("%.6f,", accData[2]) + "\n";
-                    outputStream.write(s.getBytes());
+                    if(!haveinitheading){
+                        String s = "acc," + String.format("%.3f,", timeElapsed);
+                        s += String.format("%.6f,", accData[0]);
+                        s += String.format("%.6f,", accData[1]);
+                        s += String.format("%.6f,", accData[2]) + "\n";
+                        outputStream.write(s.getBytes());
+                    }
                 } else if (event.sensor == gyr) {
                     havegyrdata = true;
                     gyrData[0] = event.values[0];
@@ -269,12 +277,14 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
                     magData[0] = event.values[0];
                     magData[1] = event.values[1];
                     magData[2] = event.values[2];
-                    double timeElapsed = (System.currentTimeMillis() - startTime) / 1000.0;
-                    String s = "mag," + String.format("%.3f,", timeElapsed);
-                    s += String.format("%.6f,", magData[0]);
-                    s += String.format("%.6f,", magData[1]);
-                    s += String.format("%.6f,", magData[2]) + "\n";
-                    outputStream.write(s.getBytes());
+                    if(!haveinitheading){
+                        double timeElapsed = (System.currentTimeMillis() - startTime) / 1000.0;
+                        String s = "mag," + String.format("%.3f,", timeElapsed);
+                        s += String.format("%.6f,", magData[0]);
+                        s += String.format("%.6f,", magData[1]);
+                        s += String.format("%.6f,", magData[2]) + "\n";
+                        outputStream.write(s.getBytes());
+                    }
                 }
             } catch (IOException e) {
                 e.printStackTrace();
@@ -290,11 +300,31 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         }
 
         if (haveinitheading) {
-            if (event.sensor == acc) {
-                System.arraycopy(event.values, 0, accData, 0, event.values.length);
-            } else if (event.sensor == mag) {
-                System.arraycopy(event.values, 0, magData, 0, event.values.length);
+            reinitheading = true;
+            try {
+                if (event.sensor == acc) {
+                    System.arraycopy(event.values, 0, accData, 0, event.values.length);
+
+                    double timeElapsed = (System.currentTimeMillis() - startTime) / 1000.0;
+                    String s = "acc," + String.format("%.3f,", timeElapsed);
+                    s += String.format("%.6f,", accData[0]);
+                    s += String.format("%.6f,", accData[1]);
+                    s += String.format("%.6f,", accData[2]) + "\n";
+                    outputStream.write(s.getBytes());
+                } else if (event.sensor == mag) {
+                    System.arraycopy(event.values, 0, magData, 0, event.values.length);
+
+                    double timeElapsed = (System.currentTimeMillis() - startTime) / 1000.0;
+                    String s = "mag," + String.format("%.3f,", timeElapsed);
+                    s += String.format("%.6f,", magData[0]);
+                    s += String.format("%.6f,", magData[1]);
+                    s += String.format("%.6f,", magData[2]) + "\n";
+                    outputStream.write(s.getBytes());
+                }
+            }catch (IOException e) {
+                e.printStackTrace();
             }
+
             adjustHeading();
         }
     }
@@ -316,6 +346,8 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
     // 更新 TextView 显示的系统时间
     private void updateTime() {
         Date currentTime = new Date();
+        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss EEEE", Locale.getDefault());
+
         String timeString = dateFormat.format(currentTime);
         textTime.setText(timeString);
     }
@@ -340,7 +372,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         my = magData[0] * Math.cos(roll) - (-magData[2]) * Math.sin(roll);
         PsiD = -Math.atan2(my, mx);
 //        startHeading = PsiD + 9.9 * Math.PI / 180.0;
-        heading = startheading;
+//        heading = startheading;
 
         Quat[0] = Math.cos(heading / 2) * Math.cos(pitch / 2) * Math.cos(roll / 2)
                 + Math.sin(heading / 2) * Math.sin(pitch / 2) * Math.sin(roll / 2);
@@ -358,6 +390,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         t1.setText("横滚角: " + df.format(roll * 180 / Math.PI) + "°");
         t2.setText("俯仰角: " + df.format(pitch * 180 / Math.PI) + "°");
         t3.setText("航向角: " + df.format(heading * 180 / Math.PI) + "°");
+        reinitheading = false;
     }
 
     public void updateHeading6(double timeGap) {

@@ -6,6 +6,19 @@
     android:layout_height="match_parent"
     tools:context=".PDRData">
 
+    <Button
+        android:id="@+id/selectFileButton"
+        android:layout_width="160dp"
+        android:layout_height="50dp"
+        android:layout_marginStart="40dp"
+        android:layout_marginTop="30dp"
+        android:layout_marginEnd="180dp"
+        android:background="@drawable/btn_1"
+        android:text="打开文件管理器"
+        app:backgroundTint="@color/mediumturquoise"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"/>
 
     <TextView
         android:id="@+id/textView"
@@ -23,22 +36,21 @@
 
     <ScrollView
         android:id="@+id/scroll"
-        android:layout_width="300dp"
+        android:layout_width="340dp"
         android:layout_height="400dp"
-        android:layout_marginStart="40dp"
+        android:layout_marginStart="20dp"
         android:layout_marginTop="168dp"
-        android:layout_marginEnd="40dp"
+        android:layout_marginEnd="20dp"
         android:fadeScrollbars="true"
         android:scrollbars="vertical"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.429"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent">
 
         <TextView
             android:id="@+id/dataView"
-            android:layout_width="300dp"
-            android:layout_height="400dp" />
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
     </ScrollView>
 
     <TextView
