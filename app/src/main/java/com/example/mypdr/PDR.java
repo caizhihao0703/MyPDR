@@ -19,46 +19,37 @@ import java.text.*;
 import java.util.*;
 
 public class PDR extends AppCompatActivity implements SensorEventListener {
-    String textName;
-    float[] accData = new float[3];
-    ArrayList<Double> accNormList = new ArrayList<>();
-    float[] gyrData = new float[3];
-    float[] magData = new float[3];
-    ArrayList<Double> stepTime = new ArrayList<>();
+    private String textName;
+    private float[] accData = new float[3];
+    private ArrayList<Double> accNormList = new ArrayList<>();
+    private float[] gyrData = new float[3];
+    private float[] magData = new float[3];
+    private ArrayList<Double> stepTime = new ArrayList<>();
 
-    public double thread = 12;
-    public double minTimeGap = 1.0;
-    boolean haveaccdata = false, havegyrdata = false, havemagdata = false, havestartheading = false;
-    long startTime;
-    double GYROtimeGap, lastGYROtime = 0;
-    TextView textStep, textDist, warning;
-    TextView t1, t2, t3, textTime;
-    TextView nowAddress, lat, lon;
-    PDRView p;
-    int stepNumber = 0;
+    private double thread = 12, minTimeGap = 1;
+    private boolean haveaccdata = false, havegyrdata = false, havemagdata = false;
+    private long startTime;
+    private double GYROtimeGap, lastGYROtime = 0, timeElapsed = 0;
+    private TextView textStep, textDist, warning, t1, t2, t3, textTime, nowAddress, lat, lon;
+    private PDRView p;
+    private int stepNumber = 0, iter = 0;
     private Handler timehandler;
-    Button startPDR, showMap, postprocess;
-    LocationManager locationManager;
-    LocationListener locationListener;
-    private double roll, pitch, heading, startheading;
-    private double mx, my;
-    private double PsiD;
-    double totalDistance = 0;
-    int iter = 0, headiter = 0;
-    boolean isRecording = false; // 用于记录数据采集状态
-    SensorManager sensorManager;
-    Sensor acc, gyr, mag;
-    FileOutputStream outputStream;
-    double[] Quat = new double[4];
-    double q0, q1, q2, q3;
-    double[] eInt = new double[3];
-    double height = Setting.H;
-    double dis = Setting.dis;
-    double latitude = 0;
-    double longitude = 0;
-    boolean isFirstPos = true;
+    private Button startPDR, showMap, postprocess;
+    private LocationManager locationManager;
+    private LocationListener locationListener;
+    private double roll, pitch, heading, mx, my, totalDistance = 0;
+    private SensorManager sensorManager;
+    private Sensor acc, gyr, mag;
+    private FileOutputStream outputStream;
+    private double[] Quat = new double[4];
+    private double q0, q1, q2, q3;
+    private double[] eInt = new double[3];
+    private final double height = Setting.H;
+    private final double dis = Setting.dis;
+    private double latitude = 0, longitude = 0;
+    private boolean isFirstPos = true;
 
-    boolean haveinitheading = false, reinitheading = true;
+    boolean isInitinghead = false, isRecording = false; //用于校准航向角// 用于记录数据采集状态
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -86,10 +77,10 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         warning = findViewById(R.id.warning);
 
 
+        //时间位置
         timehandler = new Handler();
         // 定时更新系统时间
         timehandler.postDelayed(updateTimeTask, 1000);
-
         locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 1);
@@ -111,11 +102,8 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
                 postprocess.setEnabled(true);
             } else {
                 Toast.makeText(this, "请在界面上出现角度后开始走动", Toast.LENGTH_SHORT).show();
-                postprocess.setEnabled(false);
                 startPDR.setText("Stop");
-                startPDR.setEnabled(false);
-                initHeading();
-                new Handler().postDelayed(this::startRecording, 2000); // 延迟2秒
+                startRecording();
             }
         });
         showMap.setOnClickListener(v -> {
@@ -172,7 +160,6 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         SensorManager.getOrientation(rotationMatrix, orientationAngles);
 
         heading = orientationAngles[0];
-        startheading = heading;
         if (heading > Math.PI)
             heading -= Math.PI * 2;
         else if (heading < -Math.PI)
@@ -181,15 +168,14 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         t3.setText("航向角: " + df.format(heading * 180 / Math.PI) + "°");
     }
 
-    private void initHeading() {
-        sensorManager.registerListener(this, acc, SensorManager.SENSOR_DELAY_NORMAL);
-        sensorManager.registerListener(this, mag, SensorManager.SENSOR_DELAY_NORMAL);
-
-        haveinitheading = true;
-
+    private void startRecording() {
+        isRecording = true;
+        isInitinghead = true;
+        //打开文件，文件名格式pdrData_年月日时分秒
         Date currentTime = new Date();
         SimpleDateFormat filenameFormat = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault());
         textName = filenameFormat.format(currentTime);
+        //开始记录时间
         startTime = System.currentTimeMillis();
         try {
             String fileName = "pdrData_" + textName + ".txt";
@@ -198,18 +184,19 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         } catch (IOException e) {
             e.printStackTrace();
         }
-    }
-
-    private void startRecording() {
-        isRecording = true;
-        haveinitheading = false;
-
-        startPDR.setEnabled(true);
-        sensorManager.unregisterListener(this);
 
         sensorManager.registerListener(this, acc, SensorManager.SENSOR_DELAY_NORMAL);
         sensorManager.registerListener(this, gyr, SensorManager.SENSOR_DELAY_NORMAL);
         sensorManager.registerListener(this, mag, SensorManager.SENSOR_DELAY_NORMAL);
+
+//        pitch = Math.atan2(accData[1], Math.sqrt(accData[0] * accData[0] + accData[2] * accData[2]));
+//        roll = Math.atan2(-accData[0], accData[2]);
+//        //初始航向角
+//        mx = magData[1] * Math.cos(pitch) + magData[0] * Math.sin(roll) * Math.sin(pitch) + (-magData[2]) * Math.cos(roll) * Math.sin(pitch);
+//        my = magData[0] * Math.cos(roll) - (-magData[2]) * Math.sin(roll);
+//        PsiD = -Math.atan2(my, mx);
+//        startHeading = PsiD + 9.9 * Math.PI / 180.0;
+//        heading = startheading;
     }
 
     private void stopRecording() {
@@ -225,108 +212,95 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
 
     @Override
     public void onSensorChanged(SensorEvent event) {
+        if (timeElapsed >= 2 && isInitinghead) {
+            isInitinghead = false;
+            startheading = heading;//弧度
+            Quat[0] = Math.cos(heading / 2) * Math.cos(pitch / 2) * Math.cos(roll / 2)
+                    + Math.sin(heading / 2) * Math.sin(pitch / 2) * Math.sin(roll / 2);
+            Quat[1] = Math.cos(heading / 2) * Math.cos(pitch / 2) * Math.sin(roll / 2)
+                    - Math.sin(heading / 2) * Math.sin(pitch / 2) * Math.cos(roll / 2);
+            Quat[2] = Math.cos(heading / 2) * Math.sin(pitch / 2) * Math.cos(roll / 2)
+                    + Math.sin(heading / 2) * Math.cos(pitch / 2) * Math.sin(roll / 2);
+            Quat[3] = Math.sin(heading / 2) * Math.cos(pitch / 2) * Math.cos(roll / 2)
+                    - Math.cos(heading / 2) * Math.sin(pitch / 2) * Math.sin(roll / 2);
+            q0 = Quat[0];
+            q1 = Quat[1];
+            q2 = Quat[2];
+            q3 = Quat[3];
+        }
         if (isRecording) {
-            try {
-                if (event.sensor == acc) {
-                    haveaccdata = true;
-                    accData[0] = event.values[0];
-                    accData[1] = event.values[1];
-                    accData[2] = event.values[2];
+            if (event.sensor == acc) {
+                processAccSensorData(event);
 
-                    if (accNormList.size() == 3) accNormList.remove(0);
-                    accNormList.add(Math.sqrt(accData[0] * accData[0] + accData[1] * accData[1] + accData[2] * accData[2]));
-                    if (accNormList.size() == 3) {
-                        if (DetectStep(accNormList)) {
-                            warning.setText("");
-                            haveinitheading = false;
-                            if (reinitheading) getStartHeading();
-                            UpdatePosition(stepTime);
-                        }
+                if (accNormList.size() == 3) accNormList.remove(0);//储存三个历元的加速度计数据
+                accNormList.add(Math.sqrt(accData[0] * accData[0] + accData[1] * accData[1] + accData[2] * accData[2]));
+                if (accNormList.size() == 3) {
+                    if (DetectStep(accNormList)) {
+                        warning.setText("");
+                        isInitinghead = false;
+                        UpdatePosition(stepTime);
                     }
-                    double timeElapsed = (System.currentTimeMillis() - startTime) / 1000.0;
+                }
+                if (!isInitinghead) {
                     //脚步中断
-                    if (stepTime.size() > 0) {
-                        if ((timeElapsed - stepTime.get(stepTime.size() - 1)) > 3) {
-                            warning.setText("检测到脚步中止！");
-                            haveinitheading = true;
-                        }
-                    }
-
-                    if(!haveinitheading){
-                        String s = "acc," + String.format("%.3f,", timeElapsed);
-                        s += String.format("%.6f,", accData[0]);
-                        s += String.format("%.6f,", accData[1]);
-                        s += String.format("%.6f,", accData[2]) + "\n";
-                        outputStream.write(s.getBytes());
-                    }
-                } else if (event.sensor == gyr) {
-                    havegyrdata = true;
-                    gyrData[0] = event.values[0];
-                    gyrData[1] = event.values[1];
-                    gyrData[2] = event.values[2];
-                    double timeElapsed = (System.currentTimeMillis() - startTime) / 1000.0;
-                    GYROtimeGap = timeElapsed - lastGYROtime;
-                    lastGYROtime = timeElapsed;
-                    String s = "gyo," + String.format("%.3f,", timeElapsed);
-                    s += String.format("%.6f,", gyrData[0]);
-                    s += String.format("%.6f,", gyrData[1]);
-                    s += String.format("%.6f,", gyrData[2]) + "\n";
-                    outputStream.write(s.getBytes());
-                } else if (event.sensor == mag) {
-                    havemagdata = true;
-                    magData[0] = event.values[0];
-                    magData[1] = event.values[1];
-                    magData[2] = event.values[2];
-                    if(!haveinitheading){
-                        double timeElapsed = (System.currentTimeMillis() - startTime) / 1000.0;
-                        String s = "mag," + String.format("%.3f,", timeElapsed);
-                        s += String.format("%.6f,", magData[0]);
-                        s += String.format("%.6f,", magData[1]);
-                        s += String.format("%.6f,", magData[2]) + "\n";
-                        outputStream.write(s.getBytes());
+                    if (stepTime.size() > 0 && (timeElapsed - stepTime.get(stepTime.size() - 1)) > 3) {
+                        warning.setText("检测到脚步中止！");
+                        isInitinghead = true;
                     }
                 }
-            } catch (IOException e) {
-                e.printStackTrace();
+            } else if (event.sensor == gyr) {
+                processGyrSensorData(event);
+                if (!isInitinghead) updateHeading6(GYROtimeGap);
+            } else if (event.sensor == mag) {
+                processMagSensorData(event);
             }
-            //PDR算法
-
-            if (havemagdata && haveaccdata && iter == 0) {
-                getStartHeading();
-                iter++;
-            } else if (havegyrdata && havestartheading) {
-                updateHeading6(GYROtimeGap * 27 / 80.0);
+            //如果正在校准航向角
+            if (haveaccdata && havemagdata && isInitinghead) {
+                adjustHeading();//获得起始航向角
             }
         }
+    }
 
-        if (haveinitheading) {
-            reinitheading = true;
-            try {
-                if (event.sensor == acc) {
-                    System.arraycopy(event.values, 0, accData, 0, event.values.length);
-
-                    double timeElapsed = (System.currentTimeMillis() - startTime) / 1000.0;
-                    String s = "acc," + String.format("%.3f,", timeElapsed);
-                    s += String.format("%.6f,", accData[0]);
-                    s += String.format("%.6f,", accData[1]);
-                    s += String.format("%.6f,", accData[2]) + "\n";
-                    outputStream.write(s.getBytes());
-                } else if (event.sensor == mag) {
-                    System.arraycopy(event.values, 0, magData, 0, event.values.length);
-
-                    double timeElapsed = (System.currentTimeMillis() - startTime) / 1000.0;
-                    String s = "mag," + String.format("%.3f,", timeElapsed);
-                    s += String.format("%.6f,", magData[0]);
-                    s += String.format("%.6f,", magData[1]);
-                    s += String.format("%.6f,", magData[2]) + "\n";
-                    outputStream.write(s.getBytes());
-                }
-            }catch (IOException e) {
-                e.printStackTrace();
-            }
-
-            adjustHeading();
+    private void processAccSensorData(SensorEvent event) {
+        haveaccdata = true;
+        System.arraycopy(event.values, 0, accData, 0, event.values.length);
+        try {
+            writeSensorData("acc", accData);
+        } catch (IOException e) {
+            e.printStackTrace();
         }
+    }
+
+    private void processGyrSensorData(SensorEvent event) {
+        havegyrdata = true;
+        System.arraycopy(event.values, 0, gyrData, 0, event.values.length);
+        try {
+            writeSensorData("gyo", gyrData);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        GYROtimeGap = timeElapsed - lastGYROtime;
+        lastGYROtime = timeElapsed;
+    }
+
+    private void processMagSensorData(SensorEvent event) {
+        havemagdata = true;
+        System.arraycopy(event.values, 0, magData, 0, event.values.length);
+        try {
+            writeSensorData("mag", magData);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void writeSensorData(String sensorType, float[] data) throws IOException {
+        timeElapsed = (System.currentTimeMillis() - startTime) / 1000.0;
+        String s = sensorType + "," + String.format("%.3f,", timeElapsed);
+        for (float value : data) {
+            s += String.format("%.6f,", value);
+        }
+        s += "\n";
+        outputStream.write(s.getBytes());
     }
 
     @Override
@@ -363,47 +337,19 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         }
     }
 
-    public void getStartHeading() {
-        havestartheading = true;
-        pitch = Math.atan2(accData[1], Math.sqrt(accData[0] * accData[0] + accData[2] * accData[2]));
-        roll = Math.atan2(-accData[0], accData[2]);
-        //初始航向角
-        mx = magData[1] * Math.cos(pitch) + magData[0] * Math.sin(roll) * Math.sin(pitch) + (-magData[2]) * Math.cos(roll) * Math.sin(pitch);
-        my = magData[0] * Math.cos(roll) - (-magData[2]) * Math.sin(roll);
-        PsiD = -Math.atan2(my, mx);
-//        startHeading = PsiD + 9.9 * Math.PI / 180.0;
-//        heading = startheading;
-
-        Quat[0] = Math.cos(heading / 2) * Math.cos(pitch / 2) * Math.cos(roll / 2)
-                + Math.sin(heading / 2) * Math.sin(pitch / 2) * Math.sin(roll / 2);
-        Quat[1] = Math.cos(heading / 2) * Math.cos(pitch / 2) * Math.sin(roll / 2)
-                - Math.sin(heading / 2) * Math.sin(pitch / 2) * Math.cos(roll / 2);
-        Quat[2] = Math.cos(heading / 2) * Math.sin(pitch / 2) * Math.cos(roll / 2)
-                + Math.sin(heading / 2) * Math.cos(pitch / 2) * Math.sin(roll / 2);
-        Quat[3] = Math.sin(heading / 2) * Math.cos(pitch / 2) * Math.cos(roll / 2)
-                - Math.cos(heading / 2) * Math.sin(pitch / 2) * Math.sin(roll / 2);
-        q0 = Quat[0];
-        q1 = Quat[1];
-        q2 = Quat[2];
-        q3 = Quat[3];
-        DecimalFormat df = new DecimalFormat("#0.0000");
-        t1.setText("横滚角: " + df.format(roll * 180 / Math.PI) + "°");
-        t2.setText("俯仰角: " + df.format(pitch * 180 / Math.PI) + "°");
-        t3.setText("航向角: " + df.format(heading * 180 / Math.PI) + "°");
-        reinitheading = false;
-    }
-
     public void updateHeading6(double timeGap) {
         double Ki = 0.001, Kp = 1;
-        double ax = accData[0], ay = accData[1], az = accData[2];
-        double gx = gyrData[0], gy = gyrData[1], gz = gyrData[2];
+        double ax = accData[1], ay = accData[0], az = -accData[2];
+        double gx = gyrData[1], gy = gyrData[0], gz = -gyrData[2];
         double norm;
         double vx, vy, vz;
         double ex, ey, ez;
         double q0q0 = q0 * q0;
         double q0q1 = q0 * q1;
         double q0q2 = q0 * q2;
+        double q1q1 = q1 * q1;
         double q1q3 = q1 * q3;
+        double q2q2 = q2 * q2;
         double q2q3 = q2 * q3;
         double q3q3 = q3 * q3;
 
@@ -414,9 +360,9 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         ay /= norm;
         az /= norm;
 
-        vx = q1q3 - q0q2;
-        vy = q2q3 + q0q1;
-        vz = q0q0 - 0.5 + q3q3;
+        vx = -2 * (q1q3 - q0q2);
+        vy = -2 * (q2q3 + q0q1);
+        vz = -(q0q0 - q1q1 - q2q2 + q3q3);
 
         ex = (ay * vz - az * vy);
         ey = (az * vx - ax * vz);
@@ -425,9 +371,9 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         eInt[1] += Ki * ey * timeGap;
         eInt[2] += Ki * ez * timeGap;
 
-        gx += Kp * ex + eInt[0];
-        gy += Kp * ey + eInt[1];
-        gz += Kp * ez + eInt[2];
+        gx += (Kp * ex + eInt[0]);
+        gy += (Kp * ey + eInt[1]);
+        gz += (Kp * ez + eInt[2]);
 
         double pa = q1;
         double pb = q2;
@@ -443,12 +389,9 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         q2 /= norm;
         q3 /= norm;
 
-        pitch = Math.atan2(2 * (q2 * q3 + q0 * q1), 1 - 2 * (q1 * q1 + q2 * q2));
-        roll = Math.asin(2 * (q0 * q2 - q1 * q3));
+        roll = Math.atan2(2 * (q2 * q3 + q0 * q1), 1 - 2 * (q1 * q1 + q2 * q2));
+        pitch = Math.asin(2 * (q0 * q2 - q1 * q3));
         heading = Math.atan2(2 * (q1 * q2 + q0 * q3), 1 - 2 * (q2 * q2 + q3 * q3));
-
-        double deltaheading = heading - startheading;
-        heading = startheading - deltaheading;
 
         if (heading > Math.PI)
             heading -= Math.PI * 2;
@@ -535,9 +478,6 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         pitch = Math.atan2(2 * (q2 * q3 + q0 * q1), 1 - 2 * (q1 * q1 + q2 * q2));
         roll = Math.asin(2 * (q0 * q2 - q1 * q3));
         heading = Math.atan2(2 * (q1 * q2 + q0 * q3), 1 - 2 * (q2 * q2 + q3 * q3));
-
-        double deltaheading = heading - startheading;
-        heading = startheading - deltaheading;
 
         if (heading > Math.PI)
             heading -= Math.PI * 2;
