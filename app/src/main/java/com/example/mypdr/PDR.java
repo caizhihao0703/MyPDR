@@ -6,6 +6,8 @@ import android.content.pm.PackageManager;
 import android.hardware.*;
 import android.os.*;
 import android.view.View;
+import android.view.animation.Animation;
+import android.view.animation.AnimationUtils;
 import android.widget.*;
 import android.location.*;
 
@@ -22,32 +24,46 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
     private float[] accData = new float[3];
     private ArrayList<Double> accNormList = new ArrayList<>();
     private float[] gyrData = new float[3];
+    private float[] lastgyrData = new float[3];
     private float[] magData = new float[3];
     private ArrayList<Double> stepTime = new ArrayList<>();
     private boolean haveaccdata = false;
     private boolean havemagdata = false;
+    private boolean haveinithead = false;
     private long startTime;
     private double GYROtimeGap, lastGYROtime = 0, timeElapsed = 0;
     private TextView textStep, textDist, warning, t1, t2, t3, textTime, nowAddress, lat, lon;
     private PDRView p;
     private int stepNumber = 0;
     private Handler timehandler;
-    private Button startPDR, showMap, postprocess;
+    private Button startPDR;
+    private Button postprocess;
     private LocationManager locationManager;
     private LocationListener locationListener;
-    private double roll, pitch, heading, mx, my, totalDistance = 0;
+    private double roll;
+    private double pitch;
+    private double heading;
+    private double totalDistance = 0;
     private SensorManager sensorManager;
     private Sensor acc, gyr, mag;
     private FileOutputStream outputStream;
     private double[] Quat = new double[4];
     private double q0, q1, q2, q3;
     private double[] eInt = new double[3];
-    private final double height = Setting.H;
-    private final double dis = Setting.dis;
+    private double height, dis;
     private double latitude = 0, longitude = 0;
     private boolean isFirstPos = true;
 
     boolean isInitinghead = false, isRecording = false; //用于校准航向角// 用于记录数据采集状态
+
+    private LinearLayout settingsPanel;
+    boolean useAHRS6 = false, useAHRS9 = false, useKutta = false;
+    SeekBar seekBar1;
+    SeekBar seekBar2;
+    TextView textView1;
+    TextView textView2;
+    boolean useLinearModel = false, useDynamicModel = false;
+    boolean useDetectStop = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -55,7 +71,6 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         setContentView(R.layout.activity_pdr);
         textStep = findViewById(R.id.stepNumber);
         textStep.setText("步数: ");
-        showMap = findViewById(R.id.showMap);
         t1 = findViewById(R.id.attText1);
         t2 = findViewById(R.id.attText2);
         t3 = findViewById(R.id.attText3);
@@ -66,13 +81,27 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         lon = findViewById(R.id.lon);
         nowAddress = findViewById(R.id.location);
         lat.setText("纬度: ");
-        lon.setText("纬度: ");
+        lon.setText("经度: ");
         nowAddress.setText("位置: ");
         textDist = findViewById(R.id.distance);
         textDist.setText("移动距离: ");
         textTime = findViewById(R.id.pdrTime);
         p = findViewById(R.id.PDRView);
         warning = findViewById(R.id.warning);
+        settingsPanel = findViewById(R.id.settingsPanel);
+        settingsPanel.setVisibility(View.GONE);
+        RadioGroup radioGroup1 = findViewById(R.id.radioGroup1);
+        RadioGroup radioGroup2 = findViewById(R.id.radioGroup2);
+        RadioGroup radioGroup3 = findViewById(R.id.radioGroup3);
+        radioGroup1.check(R.id.radioOption1_1);
+        radioGroup2.check(R.id.radioOption2_1);
+        radioGroup3.check(R.id.radioOption3_2);
+        Button closeSetting = findViewById(R.id.closeSettings);
+        Button openSetting = findViewById(R.id.openSetting);
+        seekBar1 = findViewById(R.id.seekBar1);
+        textView1 = findViewById(R.id.height);
+        seekBar2 = findViewById(R.id.seekBar2);
+        textView2 = findViewById(R.id.steplen);
 
 
         //时间位置
@@ -92,7 +121,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         mag = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
 
         startPDR = findViewById(R.id.startPDR);
-        showMap = findViewById(R.id.showMap);
+        Button showMap = findViewById(R.id.showMap);
         postprocess = findViewById(R.id.postprocess);
         startPDR.setOnClickListener(v -> {
             if (isRecording) {
@@ -100,7 +129,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
                 postprocess.setEnabled(true);
             } else {
                 Toast.makeText(this, "请在界面上出现角度后开始走动", Toast.LENGTH_SHORT).show();
-                startPDR.setText("Stop");
+                startPDR.setText("结束");
                 startRecording();
             }
         });
@@ -111,6 +140,89 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         postprocess.setOnClickListener(v -> {
             Intent intent = new Intent(PDR.this, PDRData.class);
             startActivity(intent);
+        });
+        openSetting.setOnClickListener(v -> {
+            Animation fadeIn = AnimationUtils.loadAnimation(PDR.this, R.anim.fade_in);
+            settingsPanel.startAnimation(fadeIn);
+            settingsPanel.setVisibility(View.VISIBLE);
+        });
+        closeSetting.setOnClickListener(v -> {
+            Animation fadeOut = AnimationUtils.loadAnimation(PDR.this, R.anim.fade_out);
+            settingsPanel.startAnimation(fadeOut);
+            settingsPanel.setVisibility(View.GONE);
+
+            RadioButton selectedRadioButton1_1 = findViewById(R.id.radioOption1_1);
+            RadioButton selectedRadioButton1_2 = findViewById(R.id.radioOption1_2);
+            RadioButton selectedRadioButton1_3 = findViewById(R.id.radioOption1_3);
+            RadioButton selectedRadioButton2_1 = findViewById(R.id.radioOption2_1);
+            RadioButton selectedRadioButton2_2 = findViewById(R.id.radioOption2_2);
+            RadioButton selectedRadioButton3_1 = findViewById(R.id.radioOption3_1);
+            RadioButton selectedRadioButton3_2 = findViewById(R.id.radioOption3_2);
+
+            if (selectedRadioButton1_1.isChecked()) {
+                useAHRS6 = true;
+                useAHRS9 = false;
+                useKutta = false;
+            } else if (selectedRadioButton1_2.isChecked()) {
+                useAHRS6 = false;
+                useAHRS9 = true;
+                useKutta = false;
+            } else if (selectedRadioButton1_3.isChecked()) {
+                useAHRS6 = false;
+                useAHRS9 = false;
+                useKutta = true;
+            }
+            if (selectedRadioButton2_1.isChecked()) {
+                useLinearModel = true;
+                useDynamicModel = false;
+            } else if (selectedRadioButton2_2.isChecked()) {
+                useLinearModel = false;
+                useDynamicModel = true;
+            }
+            if (selectedRadioButton3_1.isChecked()) {
+                useDetectStop = true;
+            } else if (selectedRadioButton3_2.isChecked()) {
+                useDetectStop = false;
+            }
+        });
+
+        seekBar1.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                // 更新TextView的数值
+                progress += 140;
+                height = progress / 100;
+                textView1.setText("身高：" + progress + "cm");
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+                // Your code here
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                // Your code here
+            }
+        });
+        seekBar2.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                // 更新TextView的数值
+                progress += 50;
+                dis = progress / 100;
+                textView2.setText("步长：" + progress + "cm");
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+                // Your code here
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                // Your code here
+            }
         });
     }
 
@@ -152,16 +264,60 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
     };
 
     private void adjustHeading() {
-        float[] rotationMatrix = new float[9];
-        float[] orientationAngles = new float[3];
-        SensorManager.getRotationMatrix(rotationMatrix, null, accData, magData);
-        SensorManager.getOrientation(rotationMatrix, orientationAngles);
+        if (!haveinithead) {
+            if (useDetectStop) {
+                float[] rotationMatrix = new float[9];
+                float[] orientationAngles = new float[3];
+                SensorManager.getRotationMatrix(rotationMatrix, null, accData, magData);
+                SensorManager.getOrientation(rotationMatrix, orientationAngles);
 
-        heading = orientationAngles[0];
-        if (heading > Math.PI)
-            heading -= Math.PI * 2;
-        else if (heading < -Math.PI)
-            heading += Math.PI * 2;
+                heading = orientationAngles[0];
+                if (heading > Math.PI)
+                    heading -= Math.PI * 2;
+                else if (heading < -Math.PI)
+                    heading += Math.PI * 2;
+                warning.setText("正在校准航向！");
+            } else {
+                pitch = Math.atan2(accData[1], Math.sqrt(accData[0] * accData[0] + accData[2] * accData[2]));
+                roll = Math.atan2(-accData[0], accData[2]);
+                //初始航向角
+                double mx = magData[1] * Math.cos(pitch) + magData[0] * Math.sin(roll) * Math.sin(pitch) + (-magData[2]) * Math.cos(roll) * Math.sin(pitch);
+                double my = magData[0] * Math.cos(roll) - (-magData[2]) * Math.sin(roll);
+                double psiD = -Math.atan2(my, mx);
+                heading = psiD + 9.9 * Math.PI / 180.0;
+                warning.setText("正在获得初始航向！");
+            }
+        } else {
+            if (useDetectStop) {
+                float[] rotationMatrix = new float[9];
+                float[] orientationAngles = new float[3];
+                SensorManager.getRotationMatrix(rotationMatrix, null, accData, magData);
+                SensorManager.getOrientation(rotationMatrix, orientationAngles);
+
+                heading = orientationAngles[0];
+                if (heading > Math.PI)
+                    heading -= Math.PI * 2;
+                else if (heading < -Math.PI)
+                    heading += Math.PI * 2;
+                warning.setText("正在校准航向！");
+            }
+        }
+
+
+        Quat[0] = Math.cos(heading / 2) * Math.cos(pitch / 2) * Math.cos(roll / 2)
+                + Math.sin(heading / 2) * Math.sin(pitch / 2) * Math.sin(roll / 2);
+        Quat[1] = Math.cos(heading / 2) * Math.cos(pitch / 2) * Math.sin(roll / 2)
+                - Math.sin(heading / 2) * Math.sin(pitch / 2) * Math.cos(roll / 2);
+        Quat[2] = Math.cos(heading / 2) * Math.sin(pitch / 2) * Math.cos(roll / 2)
+                + Math.sin(heading / 2) * Math.cos(pitch / 2) * Math.sin(roll / 2);
+        Quat[3] = Math.sin(heading / 2) * Math.cos(pitch / 2) * Math.cos(roll / 2)
+                - Math.cos(heading / 2) * Math.sin(pitch / 2) * Math.sin(roll / 2);
+        q0 = Quat[0];
+        q1 = Quat[1];
+        q2 = Quat[2];
+        q3 = Quat[3];
+
+
         DecimalFormat df = new DecimalFormat("#0.0000");
         t3.setText("航向角: " + df.format(heading * 180 / Math.PI) + "°");
     }
@@ -186,20 +342,11 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         sensorManager.registerListener(this, acc, SensorManager.SENSOR_DELAY_GAME);
         sensorManager.registerListener(this, gyr, SensorManager.SENSOR_DELAY_GAME);
         sensorManager.registerListener(this, mag, SensorManager.SENSOR_DELAY_GAME);
-
-//        pitch = Math.atan2(accData[1], Math.sqrt(accData[0] * accData[0] + accData[2] * accData[2]));
-//        roll = Math.atan2(-accData[0], accData[2]);
-//        //初始航向角
-//        mx = magData[1] * Math.cos(pitch) + magData[0] * Math.sin(roll) * Math.sin(pitch) + (-magData[2]) * Math.cos(roll) * Math.sin(pitch);
-//        my = magData[0] * Math.cos(roll) - (-magData[2]) * Math.sin(roll);
-//        PsiD = -Math.atan2(my, mx);
-//        startHeading = PsiD + 9.9 * Math.PI / 180.0;
-//        heading = startheading;
     }
 
     private void stopRecording() {
         isRecording = false;
-        startPDR.setText("Start");
+        startPDR.setText("开始");
         sensorManager.unregisterListener(this);
         try {
             outputStream.close();
@@ -212,18 +359,8 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
     public void onSensorChanged(SensorEvent event) {
         if (timeElapsed >= 2 && isInitinghead) {
             isInitinghead = false;
-            Quat[0] = Math.cos(heading / 2) * Math.cos(pitch / 2) * Math.cos(roll / 2)
-                    + Math.sin(heading / 2) * Math.sin(pitch / 2) * Math.sin(roll / 2);
-            Quat[1] = Math.cos(heading / 2) * Math.cos(pitch / 2) * Math.sin(roll / 2)
-                    - Math.sin(heading / 2) * Math.sin(pitch / 2) * Math.cos(roll / 2);
-            Quat[2] = Math.cos(heading / 2) * Math.sin(pitch / 2) * Math.cos(roll / 2)
-                    + Math.sin(heading / 2) * Math.cos(pitch / 2) * Math.sin(roll / 2);
-            Quat[3] = Math.sin(heading / 2) * Math.cos(pitch / 2) * Math.cos(roll / 2)
-                    - Math.cos(heading / 2) * Math.sin(pitch / 2) * Math.sin(roll / 2);
-            q0 = Quat[0];
-            q1 = Quat[1];
-            q2 = Quat[2];
-            q3 = Quat[3];
+            haveinithead = true;
+            warning.setText("");
         }
         if (isRecording) {
             if (event.sensor == acc) {
@@ -241,18 +378,22 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
                 if (!isInitinghead) {
                     //脚步中断
                     if (stepTime.size() > 0 && (timeElapsed - stepTime.get(stepTime.size() - 1)) > 3) {
-                        warning.setText("检测到脚步中止！");
+                        warning.setText("检测到脚步中断！");
                         isInitinghead = true;
                     }
                 }
             } else if (event.sensor == gyr) {
                 processGyrSensorData(event);
-                if (!isInitinghead) updateHeading6(GYROtimeGap);
+                if (!isInitinghead) {
+                    if (useAHRS6) updateHeading6(GYROtimeGap);
+                    else if (useAHRS9) updateHeading9(GYROtimeGap);
+                    else if (useKutta) updateKutta(GYROtimeGap);
+                }
             } else if (event.sensor == mag) {
                 processMagSensorData(event);
             }
             //如果正在校准航向角
-            if (haveaccdata && havemagdata && isInitinghead) {
+            if (haveaccdata && havemagdata && isInitinghead && useDetectStop) {
                 adjustHeading();//获得起始航向角
             }
         }
@@ -269,6 +410,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
     }
 
     private void processGyrSensorData(SensorEvent event) {
+        lastgyrData = gyrData;
         System.arraycopy(event.values, 0, gyrData, 0, event.values.length);
         try {
             writeSensorData("gyo", gyrData);
@@ -470,6 +612,67 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         q1 /= norm;
         q2 /= norm;
         q3 /= norm;
+
+        roll = Math.atan2(2 * (q2 * q3 + q0 * q1), 1 - 2 * (q1 * q1 + q2 * q2));
+        pitch = Math.asin(2 * (q0 * q2 - q1 * q3));
+        heading = Math.atan2(2 * (q1 * q2 + q0 * q3), 1 - 2 * (q2 * q2 + q3 * q3));
+
+        if (heading > Math.PI)
+            heading -= Math.PI * 2;
+        else if (heading < -Math.PI)
+            heading += Math.PI * 2;
+
+        DecimalFormat df = new DecimalFormat("#0.000000");
+        t1.setText("横滚角: " + df.format(roll * 180 / Math.PI));
+        t2.setText("俯仰角: " + df.format(pitch * 180 / Math.PI));
+        t3.setText("航向角: " + df.format(heading * 180 / Math.PI));
+    }
+
+    public void updateKutta(double timeGap) {
+        double wx = lastgyrData[1], wy = lastgyrData[0], wz = -lastgyrData[2];
+        double dx = gyrData[1] - wx, dy = gyrData[0] - wy, dz = -gyrData[2] - wz;
+        double[] k1 = new double[4];
+        double[] k2 = new double[4];
+        double[] k3 = new double[4];
+        double[] k4 = new double[4];
+        double[] qm = new double[4];
+        k1[0] = (-wx * q1 - wy * q2 - wz * q3) * timeGap / 2;
+        k1[1] = (wx * q0 + wz * q2 - wy * q3) * timeGap / 2;
+        k1[2] = (wy * q0 - wz * q1 + wx * q3) * timeGap / 2;
+        k1[3] = (wz * q0 + wy * q1 - wx * q2) * timeGap / 2;
+        qm[0] = q0 + 0.5 * k1[0];
+        qm[1] = q1 + 0.5 * k1[1];
+        qm[2] = q2 + 0.5 * k1[2];
+        qm[3] = q3 + 0.5 * k1[3];
+
+        k2[0] = (-(wx + 0.5 * dx) * qm[1] - (wy + 0.5 * dy) * qm[2] - (wz + 0.5 * dz) * qm[3]) * timeGap / 2;
+        k2[1] = ((wx + 0.5 * dx) * qm[0] + (wz + 0.5 * dz) * qm[2] - (wy + 0.5 * dy) * qm[3]) * timeGap / 2;
+        k2[2] = ((wy + 0.5 * dy) * qm[0] - (wz + 0.5 * dz) * qm[1] + (wx + 0.5 * dx) * qm[3]) * timeGap / 2;
+        k2[3] = ((wz + 0.5 * dz) * qm[0] + (wy + 0.5 * dy) * qm[1] - (wx + 0.5 * dx) * qm[2]) * timeGap / 2;
+        qm[0] = q0 + 0.5 * k2[0];
+        qm[1] = q1 + 0.5 * k2[1];
+        qm[2] = q2 + 0.5 * k2[2];
+        qm[3] = q3 + 0.5 * k2[3];
+
+        k3[0] = (-(wx + 0.5 * dx) * qm[1] - (wy + 0.5 * dy) * qm[2] - (wz + 0.5 * dz) * qm[3]) * timeGap / 2;
+        k3[1] = ((wx + 0.5 * dx) * qm[0] + (wz + 0.5 * dz) * qm[2] - (wy + 0.5 * dy) * qm[3]) * timeGap / 2;
+        k3[2] = ((wy + 0.5 * dy) * qm[0] - (wz + 0.5 * dz) * qm[1] + (wx + 0.5 * dx) * qm[3]) * timeGap / 2;
+        k3[3] = ((wz + 0.5 * dz) * qm[0] + (wy + 0.5 * dy) * qm[1] - (wx + 0.5 * dx) * qm[2]) * timeGap / 2;
+        qm[0] = q0 + k3[0];
+        qm[1] = q1 + k3[1];
+        qm[2] = q2 + k3[2];
+        qm[3] = q3 + k3[3];
+
+        k4[0] = (-(wx + dx) * qm[1] - (wy + dy) * qm[2] - (wz + dz) * qm[3]) * timeGap / 2;
+        k4[1] = ((wx + dx) * qm[0] + (wz + dz) * qm[2] - (wy + dy) * qm[3]) * timeGap / 2;
+        k4[2] = ((wy + dy) * qm[0] - (wz + dz) * qm[1] + (wx + dx) * qm[3]) * timeGap / 2;
+        k4[3] = ((wz + dz) * qm[0] + (wy + dy) * qm[1] - (wx + dx) * qm[2]) * timeGap / 2;
+
+        double dq = (k1[0] + 2 * k2[0] + 2 * k3[0] + k4[0]) / 6;
+        q0 += dq;
+        q1 += dq;
+        q2 += dq;
+        q3 += dq;
 
         roll = Math.atan2(2 * (q2 * q3 + q0 * q1), 1 - 2 * (q1 * q1 + q2 * q2));
         pitch = Math.asin(2 * (q0 * q2 - q1 * q3));

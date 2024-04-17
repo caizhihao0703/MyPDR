@@ -45,7 +45,6 @@
         </activity>
         <activity android:name=".PDR" />
         <activity android:name=".PDRData"/>
-        <activity android:name=".Setting"/>
         <activity android:name=".Map"/>
         <activity android:name=".SensorView"/>
 

@@ -60,6 +60,10 @@ public class PDRData extends AppCompatActivity {
                 String line;
                 while ((line = reader.readLine()) != null) {
                     stringBuilder.append(line).append("\n");
+
+                    //后处理
+
+
                 }
                 inputStream.close();
                 reader.close();

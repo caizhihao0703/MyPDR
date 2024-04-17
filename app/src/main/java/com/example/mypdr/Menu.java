@@ -11,7 +11,6 @@ import android.widget.Button;
 
 public class Menu extends AppCompatActivity {
     static final int REQUEST_EXTERNAL_STORAGE = 1;
-    static final int LOCATION_PERMISSION_REQUEST_CODE = 100;
     static String[] PERMISSIONS_STORAGE = {
             Manifest.permission.READ_EXTERNAL_STORAGE,
             Manifest.permission.WRITE_EXTERNAL_STORAGE
@@ -36,12 +35,6 @@ public class Menu extends AppCompatActivity {
         Button collectdata = findViewById(R.id.collectData);
         collectdata.setOnClickListener(v -> {
             Intent intent = new Intent(Menu.this, SensorView.class);
-            startActivity(intent);
-        });
-
-        Button setting = findViewById(R.id.setting);
-        setting.setOnClickListener(v -> {
-            Intent intent = new Intent(Menu.this, Setting.class);
             startActivity(intent);
         });
     }
