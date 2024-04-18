@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="map_default_width">340dp</dimen> <!-- 这里设置地图的默认宽度 -->
+    <dimen name="map_default_height">360dp</dimen> <!-- 这里设置地图的默认高度 -->
+</resources>

@@ -35,6 +35,19 @@
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintVertical_bias="0.0" />
 
+    <Button
+        android:id="@+id/changeLayer"
+        android:layout_width="85dp"
+        android:layout_height="30dp"
+        android:layout_marginBottom="10dp"
+        android:layout_marginEnd="50dp"
+        android:background="@drawable/btn_1"
+        android:text="卫星地图"
+        android:textSize="8dp"
+        app:backgroundTint="@color/sandybrown"
+        app:layout_constraintBottom_toBottomOf="@id/bmapView"
+        app:layout_constraintEnd_toEndOf="@id/bmapView"/>
+
 <!--    <com.example.mypdr.PDRView-->
 <!--        android:id="@+id/PDRView"-->
 <!--        android:layout_width="340dp"-->
@@ -373,7 +386,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="10dp"
-            android:max="100"
+            android:max="50"
             app:layout_constraintTop_toTopOf="@id/steplen" />
 
         <Button
