@@ -5,6 +5,7 @@ import android.content.pm.PackageManager;
 import android.hardware.*;
 import android.os.*;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.animation.Animation;
 import android.view.animation.AnimationUtils;
 import android.widget.*;
@@ -21,9 +22,20 @@ import java.util.*;
 
 import com.baidu.mapapi.SDKInitializer;
 import com.baidu.mapapi.map.BaiduMap;
+import com.baidu.mapapi.map.BitmapDescriptor;
+import com.baidu.mapapi.map.BitmapDescriptorFactory;
+import com.baidu.mapapi.map.MapPoi;
+import com.baidu.mapapi.map.MapStatus;
+import com.baidu.mapapi.map.MapStatusUpdate;
 import com.baidu.mapapi.map.MapStatusUpdateFactory;
 import com.baidu.mapapi.map.MapView;
+import com.baidu.mapapi.map.MarkerOptions;
+import com.baidu.mapapi.map.MyLocationConfiguration;
+import com.baidu.mapapi.map.Overlay;
+import com.baidu.mapapi.map.OverlayOptions;
+import com.baidu.mapapi.map.PolylineOptions;
 import com.baidu.mapapi.model.LatLng;
+import com.baidu.mapapi.utils.CoordinateConverter;
 
 public class PDR extends AppCompatActivity implements SensorEventListener {
     private float[] accData = new float[3];
@@ -41,8 +53,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
     //    private PDRView p;
     private int stepNumber = 0;
     private Handler timehandler;
-    private Button startPDR;
-    private Button postprocess;
+    private Button startPDR, postprocess, closeSetting, openSetting;
     private LocationManager locationManager;
     private LocationListener locationListener;
     private double roll;
@@ -72,7 +83,13 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
     private Handler handler;
     private MapView mMapView = null;
     private BaiduMap mBaiduMap;
-
+    private List<LatLng> points = new ArrayList<>();
+    private PolylineOptions polylineOptions = new PolylineOptions();
+    private OverlayOptions StartPosOption;
+    private double[] latlon = new double[2];
+    private Button changeLayer;
+    boolean isNormalLayer = true;
+    private boolean isMapFullscreen = false;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -104,14 +121,16 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         radioGroup1.check(R.id.radioOption1_1);
         radioGroup2.check(R.id.radioOption2_1);
         radioGroup3.check(R.id.radioOption3_2);
-        Button closeSetting = findViewById(R.id.closeSettings);
-        Button openSetting = findViewById(R.id.openSetting);
+        closeSetting = findViewById(R.id.closeSettings);
+        openSetting = findViewById(R.id.openSetting);
         seekBar1 = findViewById(R.id.seekBar1);
         textView1 = findViewById(R.id.height);
         seekBar2 = findViewById(R.id.seekBar2);
         textView2 = findViewById(R.id.steplen);
+        changeLayer = findViewById(R.id.changeLayer);
 
 
+        warning.setText("正在获取定位！");
         //时间位置
         timehandler = new Handler();
         // 定时更新系统时间
@@ -125,6 +144,39 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         //获取地图控件引用
         mMapView = findViewById(R.id.bmapView);
         mBaiduMap = mMapView.getMap();
+        // 设置定位图层显示方式
+        mBaiduMap.setMyLocationConfiguration(new MyLocationConfiguration(
+                MyLocationConfiguration.LocationMode.NORMAL, // 定位图层显示方式
+                true, // 是否允许显示方向信息（指南针）
+                null)); // 自定义定位图标资源ID，默认为null
+        mBaiduMap.setMyLocationEnabled(true);
+        changeLayer.setOnClickListener(v -> {
+            if (isNormalLayer) {
+                mBaiduMap.setMapType(BaiduMap.MAP_TYPE_SATELLITE);
+                changeLayer.setText("普通地图");
+                isNormalLayer = false;
+            } else {
+                mBaiduMap.setMapType(BaiduMap.MAP_TYPE_NORMAL);
+                changeLayer.setText("卫星地图");
+                isNormalLayer = true;
+            }
+        });
+        // 设置地图点击监听器
+        mBaiduMap.setOnMapClickListener(new BaiduMap.OnMapClickListener() {
+            @Override
+            public void onMapClick(LatLng point) {
+                // 在地图上的任意点被点击时执行的操作
+                toggleMapSize(); // 切换地图大小
+            }
+
+            @Override
+            public void onMapPoiClick(MapPoi poi) {
+                // 在地图上的兴趣点被点击时执行的操作
+                // 这个方法需要实现，即使你没有具体操作，也需要提供一个空的实现
+            }
+        });
+
+
 
 
         sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
@@ -142,6 +194,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
             } else {
                 Toast.makeText(this, "请在界面上出现角度后开始走动", Toast.LENGTH_SHORT).show();
                 startPDR.setText("结束");
+                startPDR.setEnabled(false);
                 startRecording();
             }
         });
@@ -238,6 +291,23 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         });
     }
 
+    private void toggleMapSize() {
+        if (isMapFullscreen) {
+            // 缩小地图
+            ViewGroup.LayoutParams params = mMapView.getLayoutParams();
+            params.width = getResources().getDimensionPixelSize(R.dimen.map_default_width);
+            params.height = getResources().getDimensionPixelSize(R.dimen.map_default_height);
+            mMapView.setLayoutParams(params);
+            isMapFullscreen = false;
+        } else {
+            // 放大地图
+            ViewGroup.LayoutParams params = mMapView.getLayoutParams();
+            params.width = ViewGroup.LayoutParams.MATCH_PARENT;
+            params.height = ViewGroup.LayoutParams.MATCH_PARENT;
+            mMapView.setLayoutParams(params);
+            isMapFullscreen = true;
+        }
+    }
     private final LocationListener mLocationListener = new LocationListener() {
         @Override
         public void onLocationChanged(Location location) {
@@ -246,11 +316,33 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
 
                 latitude = location.getLatitude();
                 longitude = location.getLongitude();
+                latlon[0] = latitude;
+                latlon[1] = longitude;
                 lat.setText("纬度: " + String.format("%.8f", latitude) + "°");
                 lon.setText("经度: " + String.format("%.8f", longitude) + "°");
-                // 设置地图中心点为30°N，114°E的经纬度位置
-                LatLng centerPoint = new LatLng(latitude, longitude);
+                warning.setText("");
+                // 设置地图中心点
+                LatLng sourceLatLng = new LatLng(latitude, longitude);
+                //初始化坐标转换工具类，指定源坐标类型和坐标数据
+                CoordinateConverter converter = new CoordinateConverter()
+                        .from(CoordinateConverter.CoordType.GPS)
+                        .coord(sourceLatLng);
+                LatLng centerPoint = converter.convert();
+                points.add(centerPoint);
                 mBaiduMap.setMapStatus(MapStatusUpdateFactory.newLatLng(centerPoint));
+
+                // 设置地图默认缩放级别为15
+                MapStatus.Builder builder = new MapStatus.Builder();
+                builder.zoom(16.0f);
+                MapStatus mapStatus = builder.build();
+                MapStatusUpdate mapStatusUpdate = MapStatusUpdateFactory.newMapStatus(mapStatus);
+                mBaiduMap.animateMapStatus(mapStatusUpdate);
+
+
+                BitmapDescriptor bitmap = BitmapDescriptorFactory.fromResource(R.drawable.icon_marker);
+                StartPosOption = new MarkerOptions().position(centerPoint).icon(bitmap);
+                //在地图上添加Marker，并显示
+                mBaiduMap.addOverlay(StartPosOption);
             }
 
             try {
@@ -378,6 +470,9 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
                     isInitinghead = false;
                     haveinithead = true;
                     warning.setText("");
+                    startPDR.setEnabled(true);
+//                    startPDR,postprocess,closeSetting,openSetting
+
                 }
             }
         };
@@ -758,12 +853,30 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         textStep.setText("步数: " + stepNumber);
         textDist.setText("移动距离: " + df.format(totalDistance) + "m");
 
-        double[] xy = CordTrans.BL2xy(latitude, longitude);
+        double[] xy = CordTrans.BL2xy(latlon[0], latlon[1]);
         xy[0] += meter * Math.cos(heading);
         xy[1] += meter * Math.sin(heading);
-        double[] BL = CordTrans.xytoBL(xy[0], xy[1], 114);
-        lat.setText("纬度: " + String.format("%.8f", BL[0]) + "°");
-        lon.setText("经度: " + String.format("%.8f", BL[1]) + "°");
+        latlon = CordTrans.xytoBL(xy[0], xy[1], 114);
+        lat.setText("纬度: " + String.format("%.8f", latlon[0]) + "°");
+        lon.setText("经度: " + String.format("%.8f", latlon[1]) + "°");
+
+        //构建折线点坐标
+        LatLng sourceLatLng = new LatLng(latlon[0], latlon[1]);
+        //初始化坐标转换工具类，指定源坐标类型和坐标数据
+        CoordinateConverter converter = new CoordinateConverter()
+                .from(CoordinateConverter.CoordType.GPS)
+                .coord(sourceLatLng);
+        LatLng convertedpoint = converter.convert();
+        points.add(convertedpoint);
+
+        OverlayOptions mOverlayOptions = new PolylineOptions()
+                .width(10)
+                .color(0xAAFF0000)
+                .points(points);
+        //在地图上绘制折线
+        mBaiduMap.clear();
+        mBaiduMap.addOverlay(StartPosOption);
+        mBaiduMap.addOverlay(mOverlayOptions);
     }
 
     public boolean DetectStep(ArrayList<Double> Acc3Epoch) {
