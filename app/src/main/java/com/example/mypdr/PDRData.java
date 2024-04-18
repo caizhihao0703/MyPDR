@@ -24,7 +24,6 @@ import org.apache.commons.math3.analysis.polynomials.PolynomialSplineFunction;
 public class PDRData extends AppCompatActivity {
 
     private TextView dataView;
-    private ExecutorService executorService = Executors.newSingleThreadExecutor();
     private Button selectFileButton;
     private static final int PICK_FILE_REQUEST_CODE = 1;
 
@@ -35,7 +34,6 @@ public class PDRData extends AppCompatActivity {
 
         dataView = findViewById(R.id.dataView);
         selectFileButton = findViewById(R.id.selectFileButton);
-
         selectFileButton.setOnClickListener(view -> openFilePicker());
     }
 
@@ -67,6 +65,10 @@ public class PDRData extends AppCompatActivity {
                 String line;
                 while ((line = reader.readLine()) != null) {
                     stringBuilder.append(line).append("\n");
+
+                    //后处理
+
+
                 }
                 PostPDR(stringBuilder);
                 inputStream.close();

@@ -3,25 +3,20 @@
     xmlns:tools="http://schemas.android.com/tools"
     package="com.example.mypdr">
 
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <!-- 这个权限用于访问GPS定位-->
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <!-- 用于访问wifi网络信息，wifi信息会用于进行网络定位-->
-    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <!-- 这个权限用于获取wifi的获取权限，wifi信息会用来进行网络定位-->
-    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE"/>
-    <!-- 访问网络，网络定位需要上网-->
-    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <!-- 访问网络，进行地图相关业务数据请求，包括地图数据，路线规划，POI检索等 -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- 读取外置存储。如果开发者使用了so动态加载功能并且把so文件放在了外置存储区域，则需要申请该权限，否则不需要 -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <!-- 写外置存储。如果开发者使用了离线地图，并且数据写在外置存储区域，则需要申请该权限 -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
-
 
 
     <application
@@ -34,7 +29,9 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.MyPDR"
         android:requestLegacyExternalStorage="true"
-        tools:targetApi="31">
+        tools:targetApi="31"
+        android:name=".DemoApplication">
+
         <activity
             android:name=".Menu"
             android:exported="true">
@@ -44,19 +41,18 @@
             </intent-filter>
         </activity>
         <activity android:name=".PDR" />
-        <activity android:name=".PDRData"/>
-        <activity android:name=".Setting"/>
-        <activity android:name=".Map"/>
-        <activity android:name=".SensorView"/>
+        <activity android:name=".PDRData" />
+        <activity android:name=".Map" />
+        <activity android:name=".SensorView" />
 
 
         <meta-data
             android:name="com.baidu.lbsapi.API_KEY"
-            android:value="R2fXe6WeOuVhLXuf5Oo6sZr0EDm01Bwj" />
-        <service android:name="com.baidu.location.f"
+            android:value="z9VoD31jx5XP0jDBkvSJ9Z11N1i9oIMz" />
+        <service
+            android:name="com.baidu.location.f"
             android:enabled="true"
-            android:process=":remote"/>
-
+            android:process=":remote" />
 
     </application>
 
