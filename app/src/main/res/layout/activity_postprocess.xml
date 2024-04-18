@@ -8,13 +8,13 @@
 
     <Button
         android:id="@+id/selectFileButton"
-        android:layout_width="160dp"
+        android:layout_width="120dp"
         android:layout_height="50dp"
         android:layout_marginStart="40dp"
         android:layout_marginTop="30dp"
         android:layout_marginEnd="180dp"
         android:background="@drawable/btn_1"
-        android:text="打开文件管理器"
+        android:text="文件管理器"
         app:backgroundTint="@color/mediumturquoise"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"

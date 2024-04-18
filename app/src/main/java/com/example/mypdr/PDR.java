@@ -1,4 +1,3 @@
-
 package com.example.mypdr;
 
 import android.content.*;
@@ -20,6 +19,12 @@ import java.io.*;
 import java.text.*;
 import java.util.*;
 
+import com.baidu.mapapi.SDKInitializer;
+import com.baidu.mapapi.map.BaiduMap;
+import com.baidu.mapapi.map.MapStatusUpdateFactory;
+import com.baidu.mapapi.map.MapView;
+import com.baidu.mapapi.model.LatLng;
+
 public class PDR extends AppCompatActivity implements SensorEventListener {
     private float[] accData = new float[3];
     private ArrayList<Double> accNormList = new ArrayList<>();
@@ -33,7 +38,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
     private long startTime;
     private double GYROtimeGap, lastGYROtime = 0, timeElapsed = 0;
     private TextView textStep, textDist, warning, t1, t2, t3, textTime, nowAddress, lat, lon;
-    private PDRView p;
+    //    private PDRView p;
     private int stepNumber = 0;
     private Handler timehandler;
     private Button startPDR;
@@ -50,20 +55,23 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
     private double[] Quat = new double[4];
     private double q0, q1, q2, q3;
     private double[] eInt = new double[3];
-    private double height, dis;
+    private double height = 1.8, dis = 0.7;
     private double latitude = 0, longitude = 0;
     private boolean isFirstPos = true;
 
     boolean isInitinghead = false, isRecording = false; //用于校准航向角// 用于记录数据采集状态
 
     private LinearLayout settingsPanel;
-    boolean useAHRS6 = false, useAHRS9 = false, useKutta = false;
+    boolean useAHRS6 = true, useAHRS9 = false, useKutta = false;
     SeekBar seekBar1;
     SeekBar seekBar2;
     TextView textView1;
     TextView textView2;
-    boolean useLinearModel = false, useDynamicModel = false;
+    boolean useLinearModel = true, useDynamicModel = false;
     boolean useDetectStop = false;
+    private Handler handler;
+    private MapView mMapView = null;
+    private BaiduMap mBaiduMap;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -86,7 +94,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         textDist = findViewById(R.id.distance);
         textDist.setText("移动距离: ");
         textTime = findViewById(R.id.pdrTime);
-        p = findViewById(R.id.PDRView);
+//        p = findViewById(R.id.PDRView);
         warning = findViewById(R.id.warning);
         settingsPanel = findViewById(R.id.settingsPanel);
         settingsPanel.setVisibility(View.GONE);
@@ -114,6 +122,10 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         } else {
             locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000, 1, mLocationListener);
         }
+        //获取地图控件引用
+        mMapView = findViewById(R.id.bmapView);
+        mBaiduMap = mMapView.getMap();
+
 
         sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
         acc = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
@@ -191,7 +203,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 // 更新TextView的数值
                 progress += 140;
-                height = progress / 100;
+                height = progress / 100.0;
                 textView1.setText("身高：" + progress + "cm");
             }
 
@@ -210,7 +222,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 // 更新TextView的数值
                 progress += 50;
-                dis = progress / 100;
+                dis = progress / 100.0;
                 textView2.setText("步长：" + progress + "cm");
             }
 
@@ -236,6 +248,9 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
                 longitude = location.getLongitude();
                 lat.setText("纬度: " + String.format("%.8f", latitude) + "°");
                 lon.setText("经度: " + String.format("%.8f", longitude) + "°");
+                // 设置地图中心点为30°N，114°E的经纬度位置
+                LatLng centerPoint = new LatLng(latitude, longitude);
+                mBaiduMap.setMapStatus(MapStatusUpdateFactory.newLatLng(centerPoint));
             }
 
             try {
@@ -263,20 +278,39 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         }
     };
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        //在activity执行onResume时执行mMapView. onResume ()，实现地图生命周期管理
+        mMapView.onResume();
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        //在activity执行onPause时执行mMapView. onPause ()，实现地图生命周期管理
+        mMapView.onPause();
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        // 移除更新时间的任务
+        timehandler.removeCallbacks(updateTimeTask);
+        // 在Activity销毁时停止位置监听器，释放资源
+        if (locationManager != null && locationListener != null) {
+            locationManager.removeUpdates(locationListener);
+        }
+        mMapView.onDestroy();
+    }
+
+
     private void adjustHeading() {
+        DecimalFormat df = new DecimalFormat("#0.0000");
         if (!haveinithead) {
             if (useDetectStop) {
-                float[] rotationMatrix = new float[9];
-                float[] orientationAngles = new float[3];
-                SensorManager.getRotationMatrix(rotationMatrix, null, accData, magData);
-                SensorManager.getOrientation(rotationMatrix, orientationAngles);
-
-                heading = orientationAngles[0];
-                if (heading > Math.PI)
-                    heading -= Math.PI * 2;
-                else if (heading < -Math.PI)
-                    heading += Math.PI * 2;
-                warning.setText("正在校准航向！");
+                getOrientation();
+                warning.setText("正在获得初始航向！");
             } else {
                 pitch = Math.atan2(accData[1], Math.sqrt(accData[0] * accData[0] + accData[2] * accData[2]));
                 roll = Math.atan2(-accData[0], accData[2]);
@@ -289,21 +323,20 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
             }
         } else {
             if (useDetectStop) {
-                float[] rotationMatrix = new float[9];
-                float[] orientationAngles = new float[3];
-                SensorManager.getRotationMatrix(rotationMatrix, null, accData, magData);
-                SensorManager.getOrientation(rotationMatrix, orientationAngles);
-
-                heading = orientationAngles[0];
-                if (heading > Math.PI)
-                    heading -= Math.PI * 2;
-                else if (heading < -Math.PI)
-                    heading += Math.PI * 2;
-                warning.setText("正在校准航向！");
+                getOrientation();
+                warning.setText("检测到脚步中断！");
+                t1.setText("横滚角: " + df.format(roll * 180 / Math.PI) + "°");
+                t2.setText("俯仰角: " + df.format(pitch * 180 / Math.PI) + "°");
+            } else {
+                warning.setText("检测到脚步中断！");
             }
         }
+        t3.setText("航向角: " + df.format(heading * 180 / Math.PI) + "°");
 
+        Euler2Quat(heading, pitch, roll);
+    }
 
+    private void Euler2Quat(double heading, double pitch, double roll) {
         Quat[0] = Math.cos(heading / 2) * Math.cos(pitch / 2) * Math.cos(roll / 2)
                 + Math.sin(heading / 2) * Math.sin(pitch / 2) * Math.sin(roll / 2);
         Quat[1] = Math.cos(heading / 2) * Math.cos(pitch / 2) * Math.sin(roll / 2)
@@ -316,15 +349,42 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         q1 = Quat[1];
         q2 = Quat[2];
         q3 = Quat[3];
+    }
 
+    private void getOrientation() {
+        pitch = Math.atan2(accData[1], Math.sqrt(accData[0] * accData[0] + accData[2] * accData[2]));
+        roll = Math.atan2(-accData[0], accData[2]);
+        float[] rotationMatrix = new float[9];
+        float[] orientationAngles = new float[3];
+        SensorManager.getRotationMatrix(rotationMatrix, null, accData, magData);
+        SensorManager.getOrientation(rotationMatrix, orientationAngles);
 
-        DecimalFormat df = new DecimalFormat("#0.0000");
-        t3.setText("航向角: " + df.format(heading * 180 / Math.PI) + "°");
+        heading = orientationAngles[0];
+        if (heading > Math.PI)
+            heading -= Math.PI * 2;
+        else if (heading < -Math.PI)
+            heading += Math.PI * 2;
     }
 
     private void startRecording() {
         isRecording = true;
         isInitinghead = true;
+        handler = new Handler(Looper.getMainLooper()) {
+            @Override
+            public void handleMessage(Message msg) {
+                super.handleMessage(msg);
+                if (msg.what == 1) {
+                    // 在这里执行需要延迟执行的命令
+                    isInitinghead = false;
+                    haveinithead = true;
+                    warning.setText("");
+                }
+            }
+        };
+
+        // 开始计时，延迟两秒执行命令
+        handler.sendEmptyMessageDelayed(1, 2000);
+
         //打开文件，文件名格式pdrData_年月日时分秒
         Date currentTime = new Date();
         SimpleDateFormat filenameFormat = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault());
@@ -357,11 +417,6 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
 
     @Override
     public void onSensorChanged(SensorEvent event) {
-        if (timeElapsed >= 2 && isInitinghead) {
-            isInitinghead = false;
-            haveinithead = true;
-            warning.setText("");
-        }
         if (isRecording) {
             if (event.sensor == acc) {
                 processAccSensorData(event);
@@ -377,8 +432,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
                 }
                 if (!isInitinghead) {
                     //脚步中断
-                    if (stepTime.size() > 0 && (timeElapsed - stepTime.get(stepTime.size() - 1)) > 3) {
-                        warning.setText("检测到脚步中断！");
+                    if (stepTime.size() > 0 && (timeElapsed - stepTime.get(stepTime.size() - 1)) > 2) {
                         isInitinghead = true;
                     }
                 }
@@ -388,12 +442,15 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
                     if (useAHRS6) updateHeading6(GYROtimeGap);
                     else if (useAHRS9) updateHeading9(GYROtimeGap);
                     else if (useKutta) updateKutta(GYROtimeGap);
+                } else if (!useDetectStop && haveinithead) {
+                    updateHeading6(GYROtimeGap);
                 }
+
             } else if (event.sensor == mag) {
                 processMagSensorData(event);
             }
             //如果正在校准航向角
-            if (haveaccdata && havemagdata && isInitinghead && useDetectStop) {
+            if (haveaccdata && havemagdata && isInitinghead) {
                 adjustHeading();//获得起始航向角
             }
         }
@@ -462,17 +519,6 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
 
         String timeString = dateFormat.format(currentTime);
         textTime.setText(timeString);
-    }
-
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        // 移除更新时间的任务
-        timehandler.removeCallbacks(updateTimeTask);
-        // 在Activity销毁时停止位置监听器，释放资源
-        if (locationManager != null && locationListener != null) {
-            locationManager.removeUpdates(locationListener);
-        }
     }
 
     public void updateHeading6(double timeGap) {
@@ -622,10 +668,10 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         else if (heading < -Math.PI)
             heading += Math.PI * 2;
 
-        DecimalFormat df = new DecimalFormat("#0.000000");
-        t1.setText("横滚角: " + df.format(roll * 180 / Math.PI));
-        t2.setText("俯仰角: " + df.format(pitch * 180 / Math.PI));
-        t3.setText("航向角: " + df.format(heading * 180 / Math.PI));
+        DecimalFormat df = new DecimalFormat("#0.0000");
+        t1.setText("横滚角: " + df.format(roll * 180 / Math.PI) + "°");
+        t2.setText("俯仰角: " + df.format(pitch * 180 / Math.PI) + "°");
+        t3.setText("航向角: " + df.format(heading * 180 / Math.PI) + "°");
     }
 
     public void updateKutta(double timeGap) {
@@ -636,43 +682,49 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         double[] k3 = new double[4];
         double[] k4 = new double[4];
         double[] qm = new double[4];
-        k1[0] = (-wx * q1 - wy * q2 - wz * q3) * timeGap / 2;
-        k1[1] = (wx * q0 + wz * q2 - wy * q3) * timeGap / 2;
-        k1[2] = (wy * q0 - wz * q1 + wx * q3) * timeGap / 2;
-        k1[3] = (wz * q0 + wy * q1 - wx * q2) * timeGap / 2;
-        qm[0] = q0 + 0.5 * k1[0];
-        qm[1] = q1 + 0.5 * k1[1];
-        qm[2] = q2 + 0.5 * k1[2];
-        qm[3] = q3 + 0.5 * k1[3];
+        k1[0] = (-wx * q1 - wy * q2 - wz * q3) / 2;
+        k1[1] = (wx * q0 - wz * q2 - wy * q3) / 2;
+        k1[2] = (wy * q0 - wz * q1 + wx * q3) / 2;
+        k1[3] = (wz * q0 + wy * q1 - wx * q2) / 2;
+        qm[0] = q0 + 0.5 * timeGap * k1[0];
+        qm[1] = q1 + 0.5 * timeGap * k1[1];
+        qm[2] = q2 + 0.5 * timeGap * k1[2];
+        qm[3] = q3 + 0.5 * timeGap * k1[3];
 
-        k2[0] = (-(wx + 0.5 * dx) * qm[1] - (wy + 0.5 * dy) * qm[2] - (wz + 0.5 * dz) * qm[3]) * timeGap / 2;
-        k2[1] = ((wx + 0.5 * dx) * qm[0] + (wz + 0.5 * dz) * qm[2] - (wy + 0.5 * dy) * qm[3]) * timeGap / 2;
-        k2[2] = ((wy + 0.5 * dy) * qm[0] - (wz + 0.5 * dz) * qm[1] + (wx + 0.5 * dx) * qm[3]) * timeGap / 2;
-        k2[3] = ((wz + 0.5 * dz) * qm[0] + (wy + 0.5 * dy) * qm[1] - (wx + 0.5 * dx) * qm[2]) * timeGap / 2;
-        qm[0] = q0 + 0.5 * k2[0];
-        qm[1] = q1 + 0.5 * k2[1];
-        qm[2] = q2 + 0.5 * k2[2];
-        qm[3] = q3 + 0.5 * k2[3];
+        k2[0] = (-(wx + dx) * qm[1] - (wy + dy) * qm[2] - (wz + dz) * qm[3]) / 4;
+        k2[1] = ((wx + dx) * qm[0] - (wz + dz) * qm[2] - (wy + dy) * qm[3]) / 4;
+        k2[2] = ((wy + dy) * qm[0] - (wz + dz) * qm[1] + (wx + dx) * qm[3]) / 4;
+        k2[3] = ((wz + dz) * qm[0] + (wy + dy) * qm[1] - (wx + dx) * qm[2]) / 4;
+        qm[0] = q0 + 0.5 * timeGap * k2[0];
+        qm[1] = q1 + 0.5 * timeGap * k2[1];
+        qm[2] = q2 + 0.5 * timeGap * k2[2];
+        qm[3] = q3 + 0.5 * timeGap * k2[3];
 
-        k3[0] = (-(wx + 0.5 * dx) * qm[1] - (wy + 0.5 * dy) * qm[2] - (wz + 0.5 * dz) * qm[3]) * timeGap / 2;
-        k3[1] = ((wx + 0.5 * dx) * qm[0] + (wz + 0.5 * dz) * qm[2] - (wy + 0.5 * dy) * qm[3]) * timeGap / 2;
-        k3[2] = ((wy + 0.5 * dy) * qm[0] - (wz + 0.5 * dz) * qm[1] + (wx + 0.5 * dx) * qm[3]) * timeGap / 2;
-        k3[3] = ((wz + 0.5 * dz) * qm[0] + (wy + 0.5 * dy) * qm[1] - (wx + 0.5 * dx) * qm[2]) * timeGap / 2;
-        qm[0] = q0 + k3[0];
-        qm[1] = q1 + k3[1];
-        qm[2] = q2 + k3[2];
-        qm[3] = q3 + k3[3];
+        k3[0] = (-(wx + dx) * qm[1] - (wy + dy) * qm[2] - (wz + dz) * qm[3]) / 4;
+        k3[1] = ((wx + dx) * qm[0] - (wz + dz) * qm[2] - (wy + dy) * qm[3]) / 4;
+        k3[2] = ((wy + dy) * qm[0] - (wz + dz) * qm[1] + (wx + dx) * qm[3]) / 4;
+        k3[3] = ((wz + dz) * qm[0] + (wy + dy) * qm[1] - (wx + dx) * qm[2]) / 4;
+        qm[0] = q0 + k3[0] * timeGap;
+        qm[1] = q1 + k3[1] * timeGap;
+        qm[2] = q2 + k3[2] * timeGap;
+        qm[3] = q3 + k3[3] * timeGap;
 
-        k4[0] = (-(wx + dx) * qm[1] - (wy + dy) * qm[2] - (wz + dz) * qm[3]) * timeGap / 2;
-        k4[1] = ((wx + dx) * qm[0] + (wz + dz) * qm[2] - (wy + dy) * qm[3]) * timeGap / 2;
-        k4[2] = ((wy + dy) * qm[0] - (wz + dz) * qm[1] + (wx + dx) * qm[3]) * timeGap / 2;
-        k4[3] = ((wz + dz) * qm[0] + (wy + dy) * qm[1] - (wx + dx) * qm[2]) * timeGap / 2;
+        k4[0] = (-(wx + dx) * qm[1] - (wy + dy) * qm[2] - (wz + dz) * qm[3]) / 2;
+        k4[1] = ((wx + dx) * qm[0] - (wz + dz) * qm[2] - (wy + dy) * qm[3]) / 2;
+        k4[2] = ((wy + dy) * qm[0] - (wz + dz) * qm[1] + (wx + dx) * qm[3]) / 2;
+        k4[3] = ((wz + dz) * qm[0] + (wy + dy) * qm[1] - (wx + dx) * qm[2]) / 2;
 
-        double dq = (k1[0] + 2 * k2[0] + 2 * k3[0] + k4[0]) / 6;
-        q0 += dq;
-        q1 += dq;
-        q2 += dq;
-        q3 += dq;
+
+        q0 += (k1[0] + 2 * k2[0] + 2 * k3[0] + k4[0]) / 6;
+        q1 += (k1[1] + 2 * k2[1] + 2 * k3[1] + k4[1]) / 6;
+        q2 += (k1[2] + 2 * k2[2] + 2 * k3[2] + k4[2]) / 6;
+        q3 += (k1[3] + 2 * k2[3] + 2 * k3[3] + k4[3]) / 6;
+
+        double norm = Math.sqrt(q0 * q0 + q1 * q1 + q2 * q2 + q3 * q3);
+        q0 /= norm;
+        q1 /= norm;
+        q2 /= norm;
+        q3 /= norm;
 
         roll = Math.atan2(2 * (q2 * q3 + q0 * q1), 1 - 2 * (q1 * q1 + q2 * q2));
         pitch = Math.asin(2 * (q0 * q2 - q1 * q3));
@@ -683,10 +735,10 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         else if (heading < -Math.PI)
             heading += Math.PI * 2;
 
-        DecimalFormat df = new DecimalFormat("#0.000000");
-        t1.setText("横滚角: " + df.format(roll * 180 / Math.PI));
-        t2.setText("俯仰角: " + df.format(pitch * 180 / Math.PI));
-        t3.setText("航向角: " + df.format(heading * 180 / Math.PI));
+        DecimalFormat df = new DecimalFormat("#0.0000");
+        t1.setText("横滚角: " + df.format(roll * 180 / Math.PI) + "°");
+        t2.setText("俯仰角: " + df.format(pitch * 180 / Math.PI) + "°");
+        t3.setText("航向角: " + df.format(heading * 180 / Math.PI) + "°");
     }
 
     public void UpdatePosition(ArrayList<Double> stepTime) {
@@ -699,7 +751,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
             Sf = 1 / (0.8 * (stepTime.get(2) - stepTime.get(1)) + 0.2 * (stepTime.get(1) - stepTime.get(0)));
         }
         float meter = (float) (dis + 0.371 * (height - 1.6) + 0.227 * (Sf - 1.79) * height / 1.6);
-        p.draw((float) heading, meter);
+//        p.draw((float) heading, meter);
 
         totalDistance += meter;
         DecimalFormat df = new DecimalFormat("#0.00000");
