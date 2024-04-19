@@ -90,6 +90,8 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
     private Button changeLayer;
     boolean isNormalLayer = true;
     private boolean isMapFullscreen = false;
+    public static double startlat = 0, startlon = 0;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -175,8 +177,6 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
                 // 这个方法需要实现，即使你没有具体操作，也需要提供一个空的实现
             }
         });
-
-
 
 
         sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
@@ -308,6 +308,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
             isMapFullscreen = true;
         }
     }
+
     private final LocationListener mLocationListener = new LocationListener() {
         @Override
         public void onLocationChanged(Location location) {
@@ -318,6 +319,9 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
                 longitude = location.getLongitude();
                 latlon[0] = latitude;
                 latlon[1] = longitude;
+                startlat = latitude;
+                startlon = longitude;
+
                 lat.setText("纬度: " + String.format("%.8f", latitude) + "°");
                 lon.setText("经度: " + String.format("%.8f", longitude) + "°");
                 warning.setText("");

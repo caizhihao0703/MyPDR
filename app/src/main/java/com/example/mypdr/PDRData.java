@@ -7,6 +7,15 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.widget.Button;
 import android.widget.TextView;
+
+import com.baidu.mapapi.map.BaiduMap;
+import com.baidu.mapapi.map.MapStatusUpdateFactory;
+import com.baidu.mapapi.map.MapView;
+import com.baidu.mapapi.map.OverlayOptions;
+import com.baidu.mapapi.map.PolylineOptions;
+import com.baidu.mapapi.model.LatLng;
+import com.baidu.mapapi.utils.CoordinateConverter;
+
 import java.io.*;
 import java.util.Scanner;
 import java.util.concurrent.ExecutionException;
@@ -19,13 +28,23 @@ import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.*;
+
 import org.apache.commons.math3.analysis.interpolation.LinearInterpolator;
 import org.apache.commons.math3.analysis.polynomials.PolynomialSplineFunction;
+
 public class PDRData extends AppCompatActivity {
 
     private TextView dataView;
     private Button selectFileButton;
     private static final int PICK_FILE_REQUEST_CODE = 1;
+
+    private MapView mMapView = null;
+    private BaiduMap mBaiduMap;
+    private Button checkContent, checkTrack;
+    private boolean isshowContent = false, isshowTrack = true;
+    private double[] latlon = new double[2];
+    private List<LatLng> points = new ArrayList<>();
+    private double lat = PDR.startlat, lon = PDR.startlon;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -33,8 +52,34 @@ public class PDRData extends AppCompatActivity {
         setContentView(R.layout.activity_postprocess);
 
         dataView = findViewById(R.id.dataView);
+        dataView.setEnabled(false);
         selectFileButton = findViewById(R.id.selectFileButton);
         selectFileButton.setOnClickListener(view -> openFilePicker());
+        checkContent = findViewById(R.id.checkContent);
+        checkTrack = findViewById(R.id.checkTrack);
+
+        mMapView = (MapView) findViewById(R.id.bmapView);
+        mBaiduMap = mMapView.getMap();
+
+        // 设置地图中心点为30°N，114°E的经纬度位置
+        LatLng sourceLatLng = new LatLng(lat, lon);
+        CoordinateConverter converter = new CoordinateConverter()
+                .from(CoordinateConverter.CoordType.GPS)
+                .coord(sourceLatLng);
+        LatLng convertedpoint = converter.convert();
+        points.add(convertedpoint);
+
+        mBaiduMap.setMapStatus(MapStatusUpdateFactory.newLatLng(convertedpoint));
+
+        checkTrack.setOnClickListener(v -> {
+            if (isshowContent) {
+                dataView.setEnabled(false);
+                isshowTrack = true;
+            } else if (isshowTrack) {
+                mMapView.setEnabled(false);
+                isshowContent = true;
+            }
+        });
     }
 
     private void openFilePicker() {
@@ -65,15 +110,12 @@ public class PDRData extends AppCompatActivity {
                 String line;
                 while ((line = reader.readLine()) != null) {
                     stringBuilder.append(line).append("\n");
-
                     //后处理
-
-
                 }
-                PostPDR(stringBuilder);
                 inputStream.close();
                 reader.close();
             }
+            PostPDR(stringBuilder);
         } catch (FileNotFoundException e) {
             e.printStackTrace();
         } catch (IOException e) {
@@ -82,19 +124,19 @@ public class PDRData extends AppCompatActivity {
 
         dataView.setText(stringBuilder.toString());
     }
+
     //配置初始参数
-    double height=1.8;
-    int timepause=200;
+    double height = 1.8;
+    int timepause = 200;
     private static double miu2G = 0.01;
-    private double[] gyroffset=new double[3];
-    private int windowSize=3;
+    private double[] gyroffset = new double[3];
+    private int windowSize = 3;
     private double threshold = 13; // 设置阈值
 
-    private void PostPDR(StringBuilder stringBuilder)
-    {
-        gyroffset[0]=-7.647624262847514e-04;
-        gyroffset[1]=7.754136478517271e-04;
-        gyroffset[2]=-4.748694187026118e-04;
+    private void PostPDR(StringBuilder stringBuilder) {
+        gyroffset[0] = -7.647624262847514e-04;
+        gyroffset[1] = 7.754136478517271e-04;
+        gyroffset[2] = -4.748694187026118e-04;
 
         Map<String, double[][]> sensorData = parseSensorData(stringBuilder);//读取数据
 
@@ -110,7 +152,7 @@ public class PDRData extends AppCompatActivity {
         double[][] newMagData = interpolatedData[1];
 
         int[] columns = {2, 3, 4};
-        double[][] filteredGyoData = meanFilter(gyoData, windowSize,columns);//数据平滑
+        double[][] filteredGyoData = meanFilter(gyoData, windowSize, columns);//数据平滑
 
         double[][] heading = new double[accData.length][2];
         double[][] q = new double[accData.length][4];
@@ -125,7 +167,8 @@ public class PDRData extends AppCompatActivity {
 
         double[] Sf = new double[realStepIndices.length];
         double[][] footmeter = new double[realStepIndices.length][2];//利用步频及行人身高计算步长
-        Sf[0] = 1;Sf[1] = 1;
+        Sf[0] = 1;
+        Sf[1] = 1;
         for (int j = 2; j < realStepIndices.length; j++) {
             double timeDiff1 = timeSequence[realStepIndices[j]];
             double timeDiff2 = timeSequence[realStepIndices[j - 1]];
@@ -140,10 +183,14 @@ public class PDRData extends AppCompatActivity {
         double[][] newHeading = finalPDR(heading, footmeter);
         double[] x = new double[footmeter.length];
         double[] y = new double[footmeter.length];
-        calculateCoordinates(newHeading, footmeter, x, y);
 
+        double[] xy = CordTrans.BL2xy(lat, lon);
+        x[0] = xy[0];
+        y[0] = xy[0];
+        calculateCoordinates(newHeading, footmeter, x, y);
     }
-    private static Map<String, double[][]> parseSensorData(StringBuilder data) {
+
+    private Map<String, double[][]> parseSensorData(StringBuilder data) {
         String[] lines = data.toString().split("\n");
 
         List<double[]> accDataList = new ArrayList<>();
@@ -179,14 +226,16 @@ public class PDRData extends AppCompatActivity {
 
         return dataMap;
     }
+
     private void adjustGyoData(double[][] gyoData) {
         for (int i = 1; i < gyoData[0].length; i++) {
             for (int j = 0; j < gyoData.length; j++) {
-                gyoData[j][i] -= gyroffset[i-1];
+                gyoData[j][i] -= gyroffset[i - 1];
             }
         }
     }
-    private static double[][][] interpolateData(double[][] accData, double[][] gyoData, double[][] magData) {
+
+    private double[][][] interpolateData(double[][] accData, double[][] gyoData, double[][] magData) {
         double[][] newAccData = new double[gyoData.length][4];
         double[][] newMagData = new double[gyoData.length][4];
 
@@ -213,7 +262,8 @@ public class PDRData extends AppCompatActivity {
 
         return new double[][][]{newAccData, newMagData};
     }
-    private static double[] interpolate(double[][] sourceData, double[][] targetData, int index) {
+
+    private double[] interpolate(double[][] sourceData, double[][] targetData, int index) {
         double[] interpolatedValues = new double[targetData.length];
 
         LinearInterpolator interpolator = new LinearInterpolator();
@@ -234,6 +284,7 @@ public class PDRData extends AppCompatActivity {
 
         return interpolatedValues;
     }
+
     private double[][] meanFilter(double[][] accData, int windowSize, int[] columns) {
         double[][] filteredData = new double[accData.length][accData[0].length];
 
@@ -261,6 +312,7 @@ public class PDRData extends AppCompatActivity {
 
         return filteredData;
     }
+
     private void getStartHeading(double[][] accData, double[][] magData, double[][] heading, double[][] q, int timepause) {
         double[] accMean = new double[3];
         double[] magMean = new double[3];
@@ -294,6 +346,7 @@ public class PDRData extends AppCompatActivity {
             System.arraycopy(q0, 0, q[i], 0, 4);
         }
     }
+
     private double mean(double[] arr) {
         double sum = 0;
         for (double num : arr) {
@@ -301,6 +354,7 @@ public class PDRData extends AppCompatActivity {
         }
         return sum / arr.length;
     }
+
     private double[] getColumnMean(double[][] data, int column, int start, int end) {
         double[] columnData = new double[end - start + 1];
         for (int i = start; i <= end; i++) {
@@ -308,6 +362,7 @@ public class PDRData extends AppCompatActivity {
         }
         return columnData;
     }
+
     private void updateHeading6(double[][] accData, double[][] gyoData, double[][] q, double[][] heading, int timepause) {
         double Ki = 0.01;
         double Kp = 1;
@@ -384,6 +439,7 @@ public class PDRData extends AppCompatActivity {
             heading[j][1] = newHeading;
         }
     }
+
     private double[] calculateAccMagnitude(double[][] accData) {
         double[] accMagnitude = new double[accData.length];
 
@@ -398,6 +454,7 @@ public class PDRData extends AppCompatActivity {
 
         return accMagnitude;
     }
+
     private double[] meanFilter(double[] data, int windowSize) {
         double[] filteredData = new double[data.length];
 
@@ -415,7 +472,8 @@ public class PDRData extends AppCompatActivity {
 
         return filteredData;
     }
-    private static double[] extractTimeSequence(double[][] accData) {
+
+    private double[] extractTimeSequence(double[][] accData) {
         double[] timeSequence = new double[accData.length];
 
         for (int i = 0; i < accData.length; i++) {
@@ -424,7 +482,8 @@ public class PDRData extends AppCompatActivity {
 
         return timeSequence;
     }
-    private static int[] footDetect(double[] timeSequence, double[] accMagnitude, double threshold) {
+
+    private int[] footDetect(double[] timeSequence, double[] accMagnitude, double threshold) {
         List<Double> peakTimes = new ArrayList<>();
         List<Integer> peakIndices = new ArrayList<>();
 
@@ -449,7 +508,8 @@ public class PDRData extends AppCompatActivity {
 
         return realStepIndicesArray;
     }
-    public static double[][] finalPDR(double[][] heading, double[][] footmeter) {
+
+    public double[][] finalPDR(double[][] heading, double[][] footmeter) {
         double[] uniqueIndices = new double[heading.length];
         for (int i = 0; i < heading.length; i++) {
             uniqueIndices[i] = heading[i][0];
@@ -478,12 +538,31 @@ public class PDRData extends AppCompatActivity {
 
         return newHeading;
     }
-    public static void calculateCoordinates(double[][] newHeading, double[][] footmeter, double[] x, double[] y) {
+
+    public void calculateCoordinates(double[][] newHeading, double[][] footmeter, double[] x, double[] y) {
         for (int i = 1; i < footmeter.length; i++) {
             x[i] = x[i - 1] + footmeter[i][1] * Math.cos(newHeading[i][1]);
             y[i] = y[i - 1] + footmeter[i][1] * Math.sin(newHeading[i][1]);
+
+            latlon = CordTrans.xytoBL(x[i], y[i], 114);
+            LatLng sourceLatLng = new LatLng(latlon[0], latlon[1]);
+            CoordinateConverter converter = new CoordinateConverter()
+                    .from(CoordinateConverter.CoordType.GPS)
+                    .coord(sourceLatLng);
+            LatLng convertedpoint = converter.convert();
+            points.add(convertedpoint);
+
+            OverlayOptions mOverlayOptions = new PolylineOptions()
+                    .width(10)
+                    .color(0xAAFF0000)
+                    .points(points);
+            //在地图上绘制折线
+            mBaiduMap.clear();
+            mBaiduMap.addOverlay(mOverlayOptions);
         }
+
     }
+
     public static double[][] removeDuplicateRows(double[][] array, double[] indices) {
         int uniqueCount = 1;
         for (int i = 1; i < array.length; i++) {
