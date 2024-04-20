@@ -414,7 +414,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
                 double mx = magData[1] * Math.cos(pitch) + magData[0] * Math.sin(roll) * Math.sin(pitch) + (-magData[2]) * Math.cos(roll) * Math.sin(pitch);
                 double my = magData[0] * Math.cos(roll) - (-magData[2]) * Math.sin(roll);
                 double psiD = -Math.atan2(my, mx);
-                heading = psiD + 9.9 * Math.PI / 180.0;
+                heading = psiD -5 * Math.PI / 180.0;
                 warning.setText("正在获得初始航向！");
             }
         } else {

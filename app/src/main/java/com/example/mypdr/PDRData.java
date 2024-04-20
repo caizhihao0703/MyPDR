@@ -32,12 +32,12 @@ import java.util.*;
 import org.apache.commons.math3.analysis.interpolation.LinearInterpolator;
 import org.apache.commons.math3.analysis.polynomials.PolynomialSplineFunction;
 
+
 public class PDRData extends AppCompatActivity {
 
     private TextView dataView;
     private Button selectFileButton;
     private static final int PICK_FILE_REQUEST_CODE = 1;
-
     private MapView mMapView = null;
     private BaiduMap mBaiduMap;
     private Button checkContent, checkTrack;
@@ -45,7 +45,20 @@ public class PDRData extends AppCompatActivity {
     private double[] latlon = new double[2];
     private List<LatLng> points = new ArrayList<>();
     private double lat = PDR.startlat, lon = PDR.startlon;
-
+    ArrayList<double[]> accData= new ArrayList<>();
+    ArrayList<double[]> gyoData= new ArrayList<>();
+    ArrayList<double[]> magData= new ArrayList<>();
+    double[] lastReadTime = new double[3];
+    ArrayList<double[]> newAccData=new ArrayList<>();
+    ArrayList<double[]> newMagData=new ArrayList<>();
+    ArrayList<double[]> Heading=new ArrayList<>();
+    ArrayList<double[]> accMagnitude=new ArrayList<>();
+    ArrayList<Integer> realStepIndices=new ArrayList<>();
+    ArrayList<double[]> foot=new ArrayList<>();
+    ArrayList<double[]> newHeading=new ArrayList<>();
+    double[] q = new double[4];
+    ArrayList<Double> x=new ArrayList<>();
+    ArrayList<Double> y=new ArrayList<>();
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -111,11 +124,34 @@ public class PDRData extends AppCompatActivity {
                 while ((line = reader.readLine()) != null) {
                     stringBuilder.append(line).append("\n");
                     //后处理
+                    String[] parts = line.split(",");
+                    double time = Double.parseDouble(parts[1]);
+                    double x = Double.parseDouble(parts[2]);
+                    double y = Double.parseDouble(parts[3]);
+                    double z = Double.parseDouble(parts[4]);
+                    String sensorType = parts[0];
+
+                    if ("acc".equals(sensorType)) {
+                        if (lastReadTime[0] <= time) {
+                            accData.add(new double[]{time, x, y, z});
+                            lastReadTime[0] = time;
+                        }
+                    } else if ("gyo".equals(sensorType)) {
+                        if (lastReadTime[1] <= time) {
+                            gyoData.add(new double[]{time, x, y, z});
+                            lastReadTime[1] = time;
+                        }
+                    } else if ("mag".equals(sensorType)) {
+                        if (lastReadTime[2] <= time) {
+                            magData.add(new double[]{time, x * miu2G, y * miu2G, z * miu2G});
+                            lastReadTime[2] = time;
+                        }
+                    }
                 }
                 inputStream.close();
                 reader.close();
             }
-            PostPDR(stringBuilder);
+            PostPDR(accData,gyoData,magData);
         } catch (FileNotFoundException e) {
             e.printStackTrace();
         } catch (IOException e) {
@@ -124,202 +160,97 @@ public class PDRData extends AppCompatActivity {
 
         dataView.setText(stringBuilder.toString());
     }
-
     //配置初始参数
     double height = 1.8;
     int timepause = 200;
     private static double miu2G = 0.01;
     private double[] gyroffset = new double[3];
-    private int windowSize = 3;
-    private double threshold = 13; // 设置阈值
+    private double threshold = 13.2; // 设置阈值
 
-    private void PostPDR(StringBuilder stringBuilder) {
+    private double Psi=-5;//设置磁偏角
+
+
+    private void PostPDR(ArrayList<double[]> accData,ArrayList<double[]> gyoData,ArrayList<double[]> magData) {
         gyroffset[0] = -7.647624262847514e-04;
         gyroffset[1] = 7.754136478517271e-04;
         gyroffset[2] = -4.748694187026118e-04;
 
-        Map<String, double[][]> sensorData = parseSensorData(stringBuilder);//读取数据
-
-        double[][] accData = sensorData.get("acc");
-        double[][] gyoData = sensorData.get("gyo");
-        double[][] magData = sensorData.get("mag");
-
         adjustGyoData(gyoData);//零偏补偿
 
-        double[][][] interpolatedData = interpolateData(accData, gyoData, magData);//数据插值到陀螺时间
+        interpolateData(accData, gyoData, magData);//数据插值到陀螺时间
 
-        double[][] newAccData = interpolatedData[0];
-        double[][] newMagData = interpolatedData[1];
+        getStartHeading(newAccData,newMagData, Heading, q);//航向初始对准
+        updateHeading6(newAccData, gyoData, q, Heading);//AHRS计算航向角变化
 
-        int[] columns = {2, 3, 4};
-        double[][] filteredGyoData = meanFilter(gyoData, windowSize, columns);//数据平滑
+        calculateAccMagnitude(accData);// 计算加速度幅值
 
-        double[][] heading = new double[accData.length][2];
-        double[][] q = new double[accData.length][4];
-        getStartHeading(newAccData, newMagData, heading, q, timepause);//航向初始对准
-        updateHeading6(newAccData, filteredGyoData, q, heading, timepause);//AHRS计算航向角变化
+        footDetectAddFoot(accMagnitude, threshold);//有效步数索引并获取脚步
 
-        double[] aaccMagnitude = calculateAccMagnitude(accData);// 计算加速度幅值
-        double[] accMagnitude = meanFilter(aaccMagnitude, windowSize);//数据平滑
+        finalPDR(Heading, foot);
 
-        double[] timeSequence = extractTimeSequence(accData);
-        int[] realStepIndices = footDetect(timeSequence, accMagnitude, threshold);//有效步数索引
-
-        double[] Sf = new double[realStepIndices.length];
-        double[][] footmeter = new double[realStepIndices.length][2];//利用步频及行人身高计算步长
-        Sf[0] = 1;
-        Sf[1] = 1;
-        for (int j = 2; j < realStepIndices.length; j++) {
-            double timeDiff1 = timeSequence[realStepIndices[j]];
-            double timeDiff2 = timeSequence[realStepIndices[j - 1]];
-            double timeDiff3 = timeSequence[realStepIndices[j - 2]];
-
-            Sf[j] = 1 / (0.8 * (timeDiff1 - timeDiff2) + 0.2 * (timeDiff2 - timeDiff3));
-        }
-        for (int j = 0; j < realStepIndices.length; j++) {
-            footmeter[j][0] = timeSequence[realStepIndices[j]];
-            footmeter[j][1] = 0.7 + 0.371 * (height - 1.6) + 0.227 * (Sf[j] - 1.79) * height / 1.6;
-        }
-        double[][] newHeading = finalPDR(heading, footmeter);
-        double[] x = new double[footmeter.length];
-        double[] y = new double[footmeter.length];
-
-        double[] xy = CordTrans.BL2xy(lat, lon);
-        x[0] = xy[0];
-        y[0] = xy[0];
-        calculateCoordinates(newHeading, footmeter, x, y);
+        calculateCoordinates(newHeading, foot);
     }
-
-    private Map<String, double[][]> parseSensorData(StringBuilder data) {
-        String[] lines = data.toString().split("\n");
-
-        List<double[]> accDataList = new ArrayList<>();
-        List<double[]> gyoDataList = new ArrayList<>();
-        List<double[]> magDataList = new ArrayList<>();
-        List<Double> existingTimes = new ArrayList<>();
-
-        for (String line : lines) {
-            String[] parts = line.split(",");
-            double time = Double.parseDouble(parts[1]);
-            double x = Double.parseDouble(parts[2]);
-            double y = Double.parseDouble(parts[3]);
-            double z = Double.parseDouble(parts[4]);
-            String sensorType = parts[0];
-
-            if (!existingTimes.contains(time)) {
-                existingTimes.add(time);
-
-                if ("acc".equals(sensorType)) {
-                    accDataList.add(new double[]{time, x, y, z});
-                } else if ("gyo".equals(sensorType)) {
-                    gyoDataList.add(new double[]{time, x, y, z});
-                } else if ("mag".equals(sensorType)) {
-                    magDataList.add(new double[]{time, x * miu2G, y * miu2G, z * miu2G});
-                }
-            }
-        }
-
-        Map<String, double[][]> dataMap = new HashMap<>();
-        dataMap.put("acc", accDataList.toArray(new double[0][]));
-        dataMap.put("gyo", gyoDataList.toArray(new double[0][]));
-        dataMap.put("mag", magDataList.toArray(new double[0][]));
-
-        return dataMap;
-    }
-
-    private void adjustGyoData(double[][] gyoData) {
-        for (int i = 1; i < gyoData[0].length; i++) {
-            for (int j = 0; j < gyoData.length; j++) {
-                gyoData[j][i] -= gyroffset[i - 1];
+    private void adjustGyoData(ArrayList<double[]> gyoData) {
+        for (int i = 1; i < gyoData.get(0).length; i++) {
+            for (double[] data : gyoData) {
+                data[i] -= gyroffset[i - 1];
             }
         }
     }
-
-    private double[][][] interpolateData(double[][] accData, double[][] gyoData, double[][] magData) {
-        double[][] newAccData = new double[gyoData.length][4];
-        double[][] newMagData = new double[gyoData.length][4];
-
+    private void interpolateData(ArrayList<double[]> accData, ArrayList<double[]> gyoData, ArrayList<double[]> magData) {
         // Copy time data from gyoData
-        for (int i = 0; i < gyoData.length; i++) {
-            newAccData[i][0] = gyoData[i][0];
-            newMagData[i][0] = gyoData[i][0];
-        }
-
-        // Interpolate accData and magData if timestamps do not match
-        for (int i = 1; i < 4; i++) {
-            if (!Arrays.equals(accData[0], gyoData[0])) {
-                newAccData[i] = interpolate(accData, gyoData, i);
-            } else {
-                newAccData[i] = Arrays.copyOfRange(accData[i], 1, accData[i].length);
+        int[] index={0,0};
+        for (int i = 0; i < gyoData.size(); i++) {
+            double[] accRow = new double[4];
+            double[] magRow = new double[4];
+            accRow[0] = gyoData.get(i)[0];
+            magRow[0] = gyoData.get(i)[0];
+            for (int column = 1; column < 4; column++) {
+                accRow[column]=interpolate(accData, gyoData.get(i)[0], index,column,0);
+                magRow[column]=interpolate(magData, gyoData.get(i)[0], index,column,1);
             }
-
-            if (!Arrays.equals(magData[0], gyoData[0])) {
-                newMagData[i] = interpolate(magData, gyoData, i);
-            } else {
-                newMagData[i] = Arrays.copyOfRange(magData[i], 1, magData[i].length);
-            }
+            newAccData.add(accRow);
+            newMagData.add(magRow);
         }
-
-        return new double[][][]{newAccData, newMagData};
     }
+    private static double interpolate(ArrayList<double[]> data, double timestamp, int[] index,int column,int flag) {
+        int i = 0;
+        int n = data.size();
 
-    private double[] interpolate(double[][] sourceData, double[][] targetData, int index) {
-        double[] interpolatedValues = new double[targetData.length];
-
-        LinearInterpolator interpolator = new LinearInterpolator();
-        PolynomialSplineFunction splineFunction = interpolator.interpolate(sourceData[0], sourceData[index]);
-
-        for (int i = 0; i < targetData.length; i++) {
-            double targetTime = targetData[i][0];
-            if (targetTime < sourceData[0][0]) {
-                // Target time is earlier than source data time
-                interpolatedValues[i] = sourceData[index][1]; // Use the first value in source data
-            } else if (targetTime > sourceData[sourceData.length - 1][0]) {
-                // Target time is later than the last source data time
-                interpolatedValues[i] = sourceData[index][sourceData.length - 1];
-            } else {
-                interpolatedValues[i] = splineFunction.value(targetTime);
-            }
+        // 从上次找到的位置开始查找
+        if (index[flag] >= 0 && index[flag] < n) {
+            i = index[flag];
         }
 
-        return interpolatedValues;
+        // 寻找大于等于timestamp的数据点
+        while (i < n && data.get(i)[0] < timestamp) {
+            i++;
+        }
+
+        if (i == n) {
+            i = n - 1; // 如果超出数据范围，将位置索引设置为最后一个数据点的索引
+        }
+
+        // 更新位置索引
+        index[flag] = i;
+
+        if (i == 0) {
+            return data.get(0)[column]; // 没有找到大于等于timestamp的数据，返回第一个数据点
+        }
+        double x0 = data.get(i - 1)[0];
+        double x1 = data.get(i)[0];
+        double y0 = data.get(i - 1)[column];
+        double y1 = data.get(i)[column];
+
+        return y0 + (y1 - y0) * ((timestamp - x0) / (x1 - x0));
     }
-
-    private double[][] meanFilter(double[][] accData, int windowSize, int[] columns) {
-        double[][] filteredData = new double[accData.length][accData[0].length];
-
-        for (int i = 0; i < accData.length; i++) {
-            for (int j = 0; j < accData[0].length; j++) {
-                filteredData[i][j] = accData[i][j]; // 复制原始数据到滤波数据
-            }
-        }
-
-        for (int columnIndex : columns) {
-            for (int i = 0; i < accData.length; i++) {
-                int start = Math.max(0, i - windowSize);
-                int end = Math.min(accData.length - 1, i + windowSize);
-
-                double sum = 0;
-                int count = 0;
-                for (int k = start; k <= end; k++) {
-                    sum += accData[k][columnIndex];
-                    count++;
-                }
-
-                filteredData[i][columnIndex] = sum / count; // 计算均值并赋值给滤波数据
-            }
-        }
-
-        return filteredData;
-    }
-
-    private void getStartHeading(double[][] accData, double[][] magData, double[][] heading, double[][] q, int timepause) {
+    private void getStartHeading(ArrayList<double[]> accData, ArrayList<double[]> magData, ArrayList<double[]> heading, double[] q) {
         double[] accMean = new double[3];
         double[] magMean = new double[3];
 
         for (int i = 1; i <= 3; i++) {
-            accMean[i - 1] = mean(getColumnMean(accData, i, 0, timepause - 1));
-            magMean[i - 1] = mean(getColumnMean(magData, i, 0, timepause - 1));
+            accMean[i - 1] = getColumnMean(accData, i, 0, timepause - 1);
+            magMean[i - 1] = getColumnMean(magData, i, 0, timepause - 1);
         }
 
         double pitch = Math.atan2(accMean[1], Math.sqrt(accMean[0] * accMean[0] + accMean[2] * accMean[2]));
@@ -329,57 +260,48 @@ public class PDRData extends AppCompatActivity {
         double my = magMean[0] * Math.cos(roll) - magMean[1] * Math.sin(roll);
         double psiD = -Math.atan2(my, mx);
 
-        double startHeading = psiD - 5 * Math.PI / 180.0;
+        double startHeading = psiD +Psi * Math.PI / 180.0;
 
-        double[] q0 = new double[4];
-        q0[0] = Math.cos(startHeading / 2) * Math.cos(pitch / 2) * Math.cos(roll / 2)
+        q[0] = Math.cos(startHeading / 2) * Math.cos(pitch / 2) * Math.cos(roll / 2)
                 + Math.sin(startHeading / 2) * Math.sin(pitch / 2) * Math.sin(roll / 2);
-        q0[1] = Math.cos(startHeading / 2) * Math.cos(pitch / 2) * Math.sin(roll / 2)
+        q[1] = Math.cos(startHeading / 2) * Math.cos(pitch / 2) * Math.sin(roll / 2)
                 - Math.sin(startHeading / 2) * Math.sin(pitch / 2) * Math.cos(roll / 2);
-        q0[2] = Math.cos(startHeading / 2) * Math.sin(pitch / 2) * Math.cos(roll / 2)
+        q[2] = Math.cos(startHeading / 2) * Math.sin(pitch / 2) * Math.cos(roll / 2)
                 + Math.sin(startHeading / 2) * Math.cos(pitch / 2) * Math.sin(roll / 2);
-        q0[3] = Math.sin(startHeading / 2) * Math.cos(pitch / 2) * Math.cos(roll / 2)
+        q[3] = Math.sin(startHeading / 2) * Math.cos(pitch / 2) * Math.cos(roll / 2)
                 - Math.cos(startHeading / 2) * Math.sin(pitch / 2) * Math.sin(roll / 2);
 
         for (int i = 0; i < timepause; i++) {
-            heading[i][1] = startHeading;
-            System.arraycopy(q0, 0, q[i], 0, 4);
+            double[] head=new double[2];
+            head[0]=gyoData.get(i)[0];
+            head[1]=startHeading;
+            Heading.add(head);
         }
     }
-
-    private double mean(double[] arr) {
-        double sum = 0;
-        for (double num : arr) {
-            sum += num;
-        }
-        return sum / arr.length;
-    }
-
-    private double[] getColumnMean(double[][] data, int column, int start, int end) {
-        double[] columnData = new double[end - start + 1];
+    private double getColumnMean(ArrayList<double[]> data, int column, int start, int end) {
+        double sum=0;double num=end-start+1;
         for (int i = start; i <= end; i++) {
-            columnData[i - start] = data[i][column];
+            sum += data.get(i)[column];
         }
-        return columnData;
+        return sum /num;
     }
-
-    private void updateHeading6(double[][] accData, double[][] gyoData, double[][] q, double[][] heading, int timepause) {
+    private void updateHeading6(ArrayList<double[]> accData, ArrayList<double[]> gyoData, double[] q, ArrayList<double[]> heading) {
         double Ki = 0.01;
         double Kp = 1;
         double[] eInt = new double[3];
 
-        for (int j = timepause; j < gyoData.length; j++) {
-            double ax = accData[j][1];
-            double ay = accData[j][0];
-            double az = -accData[j][2];
-            double gx = gyoData[j][1];
-            double gy = gyoData[j][0];
-            double gz = -gyoData[j][2];
+        for (int j = timepause; j < gyoData.size(); j++) {
+            double ax = accData.get(j)[2];
+            double ay = accData.get(j)[1];
+            double az = -accData.get(j)[3];
+            double gx = gyoData.get(j)[2];
+            double gy = gyoData.get(j)[1];
+            double gz = -gyoData.get(j)[3];
 
-            double q0 = q[j - 1][0];
-            double q1 = q[j - 1][1];
-            double q2 = q[j - 1][2];
-            double q3 = q[j - 1][3];
+            double q0 = q[0];
+            double q1 = q[1];
+            double q2 = q[2];
+            double q3 = q[3];
 
             double q0q0 = q0 * q0;
             double q0q1 = q0 * q1;
@@ -388,7 +310,7 @@ public class PDRData extends AppCompatActivity {
             double q2q3 = q2 * q3;
             double q3q3 = q3 * q3;
 
-            double timegap = gyoData[j][0] - gyoData[j - 1][0];
+            double timeGap = gyoData.get(j)[0] - gyoData.get(j-1)[0];
 
             double norm = Math.sqrt(ax * ax + ay * ay + az * az);
             if (norm == 0) {
@@ -407,9 +329,9 @@ public class PDRData extends AppCompatActivity {
             double ey = az * vx - ax * vz;
             double ez = ax * vy - ay * vx;
 
-            eInt[0] += ex * timegap;
-            eInt[1] += ey * timegap;
-            eInt[2] += ez * timegap;
+            eInt[0] += ex * timeGap;
+            eInt[1] += ey * timeGap;
+            eInt[2] += ez * timeGap;
 
             gx = gx + Kp * ex + Ki * eInt[0];
             gy = gy + Kp * ey + Ki * eInt[1];
@@ -418,133 +340,94 @@ public class PDRData extends AppCompatActivity {
             double pa = q1;
             double pb = q2;
             double pc = q3;
-            q0 = q0 + (-q1 * gx - q2 * gy - q3 * gz) * (0.5 * timegap);
-            q1 = pa + (q0 * gx + pb * gz - pc * gy) * (0.5 * timegap);
-            q2 = pb + (q0 * gy - pa * gz + pc * gx) * (0.5 * timegap);
-            q3 = pc + (q0 * gz + pa * gy - pb * gx) * (0.5 * timegap);
+            q0 = q0 + (-q1 * gx - q2 * gy - q3 * gz) * (0.5 * timeGap);
+            q1 = pa + (q0 * gx + pb * gz - pc * gy) * (0.5 * timeGap);
+            q2 = pb + (q0 * gy - pa * gz + pc * gx) * (0.5 * timeGap);
+            q3 = pc + (q0 * gz + pa * gy - pb * gx) * (0.5 * timeGap);
 
             double normQ = Math.sqrt(q0 * q0 + q1 * q1 + q2 * q2 + q3 * q3);
-            q[j][0] = q0 / normQ;
-            q[j][1] = q1 / normQ;
-            q[j][2] = q2 / normQ;
-            q[j][3] = q3 / normQ;
+            q[0] = q0 / normQ;
+            q[1] = q1 / normQ;
+            q[2] = q2 / normQ;
+            q[3] = q3 / normQ;
 
-            double newHeading = Math.atan2(2 * (q1 * q2 + q0 * q3), 1 - 2 * (q2 * q2 + q3 * q3));
-            if (newHeading > Math.PI) {
-                newHeading -= 2 * Math.PI;
-            } else if (newHeading < -Math.PI) {
-                newHeading += 2 * Math.PI;
+            double[] Head=new double[2];
+            Head[1] = Math.atan2(2 * (q[1] * q[2] + q[0] * q[3]), 1 - 2 * (q[2] * q[2] + q[3] * q[3]));
+            if (Head[1] > Math.PI) {
+                Head[1] -= 2 * Math.PI;
+            } else if (Head[1] < -Math.PI) {
+                Head[1] += 2 * Math.PI;
             }
-
-            heading[j][1] = newHeading;
+            Head[0]=gyoData.get(j)[0];
+            Heading.add(Head);
         }
     }
+    private void calculateAccMagnitude(ArrayList<double[]> accData) {
+        for (int i = 0; i < accData.size(); i++) {
+            double ax = accData.get(i)[1];
+            double ay = accData.get(i)[2];
+            double az = accData.get(i)[3];
 
-    private double[] calculateAccMagnitude(double[][] accData) {
-        double[] accMagnitude = new double[accData.length];
 
-        for (int i = 0; i < accData.length; i++) {
-            double ax = accData[i][1];
-            double ay = accData[i][2];
-            double az = accData[i][3];
-
-            double magnitude = Math.sqrt(ax * ax + ay * ay + az * az);
-            accMagnitude[i] = magnitude;
+            double[] magnitude=new double[2];
+            magnitude[1]= Math.sqrt(ax * ax + ay * ay + az * az);
+            magnitude[0] = accData.get(i)[0];
+            accMagnitude.add(magnitude);
         }
-
-        return accMagnitude;
     }
-
-    private double[] meanFilter(double[] data, int windowSize) {
-        double[] filteredData = new double[data.length];
-
-        for (int i = 0; i < data.length; i++) {
-            double sum = 0.0;
-            int count = 0;
-
-            for (int j = Math.max(0, i - windowSize + 1); j <= i; j++) {
-                sum += data[j];
-                count++;
-            }
-
-            filteredData[i] = sum / count;
-        }
-
-        return filteredData;
-    }
-
-    private double[] extractTimeSequence(double[][] accData) {
-        double[] timeSequence = new double[accData.length];
-
-        for (int i = 0; i < accData.length; i++) {
-            timeSequence[i] = accData[i][0]; // 提取acc_data的第一列作为时间序列
-        }
-
-        return timeSequence;
-    }
-
-    private int[] footDetect(double[] timeSequence, double[] accMagnitude, double threshold) {
+    private void footDetectAddFoot(ArrayList<double[]> accMagnitude, double threshold) {
         List<Double> peakTimes = new ArrayList<>();
         List<Integer> peakIndices = new ArrayList<>();
 
         // 峰值探测
-        for (int i = 2; i < accMagnitude.length; i++) {
-            if (accMagnitude[i - 1] > accMagnitude[i] && accMagnitude[i - 1] > accMagnitude[i - 2] && accMagnitude[i - 1] > threshold) {
-                peakTimes.add(timeSequence[i - 1]);
+        for (int i = 2; i < accMagnitude.size(); i++) {
+            if (accMagnitude.get(i-1)[1] > accMagnitude.get(i)[1] && accMagnitude.get(i-1)[1] > accMagnitude.get(i-2)[1] && accMagnitude.get(i-1)[1] > threshold) {
+                peakTimes.add(accMagnitude.get(i-1)[0]);
                 peakIndices.add(i - 1);
             }
         }
-
         // 脚步判断
-        List<Integer> realStepIndices = new ArrayList<>();
         for (int i = 2; i < peakTimes.size(); i++) {
-            if (peakTimes.get(i) - peakTimes.get(i - 2) > 1) {
+            if (peakTimes.get(i) - peakTimes.get(i - 2) > 1&&peakTimes.get(i) - peakTimes.get(i - 1) > 0.4&&peakTimes.get(i-1) - peakTimes.get(i - 2) > 0.4) {
                 realStepIndices.add(peakIndices.get(i));
             }
         }
-
-        // 将List转换为int数组
-        int[] realStepIndicesArray = realStepIndices.stream().mapToInt(Integer::intValue).toArray();
-
-        return realStepIndicesArray;
-    }
-
-    public double[][] finalPDR(double[][] heading, double[][] footmeter) {
-        double[] uniqueIndices = new double[heading.length];
-        for (int i = 0; i < heading.length; i++) {
-            uniqueIndices[i] = heading[i][0];
-        }
-
-        heading = removeDuplicateRows(heading, uniqueIndices);
-
-        double[][] newHeading = new double[footmeter.length][2];
-
-        for (int i = 0; i < footmeter.length; i++) {
-            newHeading[i][0] = footmeter[i][0];
-        }
-
-        LinearInterpolator interpolator = new LinearInterpolator();
-        PolynomialSplineFunction splineFunction = interpolator.interpolate(heading[0], heading[1]);
-
-        for (int i = 0; i < footmeter.length; i++) {
-            if (footmeter[i][0] < heading[0][0]) {
-                newHeading[i][1] = heading[0][1];
-            } else if (footmeter[i][0] > heading[heading.length - 1][0]) {
-                newHeading[i][1] = heading[heading.length - 1][1];
-            } else {
-                newHeading[i][1] = splineFunction.value(footmeter[i][0]);
+        //添加脚步
+        for (int j = 0; j < realStepIndices.size(); j++) {
+            double[] footRow=new double[2];
+            double sf=1;
+            footRow[0]=accMagnitude.get(realStepIndices.get(j))[0];
+            if(j>2)
+            {
+                double timeDiff1 = accMagnitude.get(realStepIndices.get(j))[0];
+                double timeDiff2 = accMagnitude.get(realStepIndices.get(j-1))[0];
+                double timeDiff3 = accMagnitude.get(realStepIndices.get(j-2))[0];
+                sf=1 / (0.8 * (timeDiff1 - timeDiff2) + 0.2 * (timeDiff2 - timeDiff3));
             }
+            footRow[1]= 0.7 + 0.371 * (height - 1.6) + 0.227 * (sf - 1.79) * height / 1.6;
+            foot.add(footRow);
         }
-
-        return newHeading;
     }
+    public void finalPDR(ArrayList<double[]> heading, ArrayList<double[]> foot) {
+        int index[]={0};
 
-    public void calculateCoordinates(double[][] newHeading, double[][] footmeter, double[] x, double[] y) {
-        for (int i = 1; i < footmeter.length; i++) {
-            x[i] = x[i - 1] + footmeter[i][1] * Math.cos(newHeading[i][1]);
-            y[i] = y[i - 1] + footmeter[i][1] * Math.sin(newHeading[i][1]);
+        // Interpolate Heading data
+        for (int i = 0; i < foot.size(); i++) {
+            double[] headingRow=new double[2];
+            headingRow[0]=foot.get(i)[0];
+            headingRow[1] = interpolate(heading, foot.get(i)[0],index,1,0);
+            newHeading.add(headingRow);
+        }
+    }
+    public void calculateCoordinates(ArrayList<double[]> newHeading, ArrayList<double[]> foot) {
+        double[] xy = CordTrans.BL2xy(lat, lon);
+        x.add(xy[0]);y.add(xy[1]);
+        for (int i = 1; i <= foot.size(); i++) {
+            double x0 = x.get(i-1)+ foot.get(i-1)[1] * Math.cos(newHeading.get(i-1)[1]);
+            double y0 = y.get(i-1) + foot.get(i-1)[1] * Math.sin(newHeading.get(i-1)[1]);
+            x.add(x0);y.add(y0);
 
-            latlon = CordTrans.xytoBL(x[i], y[i], 114);
+            latlon = CordTrans.xytoBL(x0, y0, 114);
             LatLng sourceLatLng = new LatLng(latlon[0], latlon[1]);
             CoordinateConverter converter = new CoordinateConverter()
                     .from(CoordinateConverter.CoordType.GPS)
@@ -561,28 +444,6 @@ public class PDRData extends AppCompatActivity {
             mBaiduMap.addOverlay(mOverlayOptions);
         }
 
-    }
-
-    public static double[][] removeDuplicateRows(double[][] array, double[] indices) {
-        int uniqueCount = 1;
-        for (int i = 1; i < array.length; i++) {
-            if (array[i][0] != array[i - 1][0]) {
-                uniqueCount++;
-            }
-        }
-
-        double[][] result = new double[uniqueCount][2];
-        result[0] = array[0];
-
-        int currentIndex = 1;
-        for (int i = 1; i < array.length; i++) {
-            if (array[i][0] != array[i - 1][0]) {
-                result[currentIndex] = array[i];
-                currentIndex++;
-            }
-        }
-
-        return result;
     }
 }
 
