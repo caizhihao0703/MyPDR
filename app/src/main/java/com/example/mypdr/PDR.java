@@ -66,20 +66,20 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
     private double[] Quat = new double[4];
     private double q0, q1, q2, q3;
     private double[] eInt = new double[3];
-    private double height = 1.8, dis = 0.7;
+    public static double height = 1.8, dis = 0.7;
     private double latitude = 0, longitude = 0;
     private boolean isFirstPos = true;
 
     boolean isInitinghead = false, isRecording = false; //用于校准航向角// 用于记录数据采集状态
 
     private LinearLayout settingsPanel;
-    boolean useAHRS6 = true, useAHRS9 = false, useKutta = false;
+    static boolean useAHRS6 = true, useAHRS9 = false, useKutta = false;
     SeekBar seekBar1;
     SeekBar seekBar2;
     TextView textView1;
     TextView textView2;
-    boolean useLinearModel = true, useDynamicModel = false;
-    boolean useDetectStop = false;
+    static boolean useLinearModel = true, useDynamicModel = false;
+    static boolean useDetectStop = false;
     private Handler handler;
     private MapView mMapView = null;
     private BaiduMap mBaiduMap;
