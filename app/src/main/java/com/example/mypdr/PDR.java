@@ -418,7 +418,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
                 double mx = magData[1] * Math.cos(pitch) + magData[0] * Math.sin(roll) * Math.sin(pitch) + (-magData[2]) * Math.cos(roll) * Math.sin(pitch);
                 double my = magData[0] * Math.cos(roll) - (-magData[2]) * Math.sin(roll);
                 double psiD = -Math.atan2(my, mx);
-                heading = psiD -5 * Math.PI / 180.0;
+                heading = psiD - 5 * Math.PI / 180.0;
                 warning.setText("正在获得初始航向！");
             }
         } else {
@@ -502,7 +502,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
             e.printStackTrace();
         }
 
-        String s = String.format("%.10f,%.10f,", startlat,startlon);
+        String s = String.format("%.10f,%.10f,", startlat, startlon);
         s += "\n";
         outputStream.write(s.getBytes());
 
@@ -921,9 +921,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
                     flag = true;
                 }
             }
-
         }
-
         return flag;
     }
 }
