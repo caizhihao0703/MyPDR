@@ -63,6 +63,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
     private SensorManager sensorManager;
     private Sensor acc, gyr, mag;
     private FileOutputStream outputStream;
+    private FileOutputStream outputStream2;
     private double[] Quat = new double[4];
     private double q0, q1, q2, q3;
     private double[] eInt = new double[3];
@@ -498,6 +499,9 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
             String fileName = "pdrData_" + textName + ".txt";
             File file = new File(getExternalFilesDir(null), fileName);
             outputStream = new FileOutputStream(file);
+            String fileName2 = "xy_" + textName + ".txt";
+            File file2 = new File(getExternalFilesDir(null), fileName2);
+            outputStream2 = new FileOutputStream(file2);
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -534,7 +538,11 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
                     if (DetectStep(accNormList)) {
                         warning.setText("");
                         isInitinghead = false;
-                        UpdatePosition(stepTime);
+                        try {
+                            UpdatePosition(stepTime);
+                        } catch (IOException e) {
+                            throw new RuntimeException(e);
+                        }
                     }
                 }
                 if (!isInitinghead) {
@@ -848,7 +856,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         t3.setText("航向角: " + df.format(heading * 180 / Math.PI) + "°");
     }
 
-    public void UpdatePosition(ArrayList<Double> stepTime) {
+    public void UpdatePosition(ArrayList<Double> stepTime) throws IOException {
         stepNumber += 1;
 
         double Sf;
@@ -866,6 +874,10 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         textDist.setText("移动距离: " + df.format(totalDistance) + "m");
 
         double[] xy = CordTrans.BL2xy(latlon[0], latlon[1]);
+        String s = String.format("%.6f,%.6f,", xy[0], xy[1]);
+        s += "\n";
+        outputStream2.write(s.getBytes());
+
         xy[0] += meter * Math.cos(heading);
         xy[1] += meter * Math.sin(heading);
         latlon = CordTrans.xytoBL(xy[0], xy[1], 114);
