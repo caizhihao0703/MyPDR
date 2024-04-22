@@ -502,7 +502,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
             e.printStackTrace();
         }
 
-        String s = String.format("%.10f %.10f,", startlat,startlon);
+        String s = String.format("%.10f,%.10f,", startlat,startlon);
         s += "\n";
         outputStream.write(s.getBytes());
 
