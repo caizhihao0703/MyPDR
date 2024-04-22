@@ -195,7 +195,11 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
                 Toast.makeText(this, "请在界面上出现角度后开始走动", Toast.LENGTH_SHORT).show();
                 startPDR.setText("结束");
                 startPDR.setEnabled(false);
-                startRecording();
+                try {
+                    startRecording();
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
             }
         });
         showMap.setOnClickListener(v -> {
@@ -462,7 +466,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
             heading += Math.PI * 2;
     }
 
-    private void startRecording() {
+    private void startRecording() throws IOException {
         isRecording = true;
         isInitinghead = true;
         handler = new Handler(Looper.getMainLooper()) {
@@ -497,6 +501,10 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         } catch (IOException e) {
             e.printStackTrace();
         }
+
+        String s = String.format("%.10f %.10f,", startlat,startlon);
+        s += "\n";
+        outputStream.write(s.getBytes());
 
         sensorManager.registerListener(this, acc, SensorManager.SENSOR_DELAY_GAME);
         sensorManager.registerListener(this, gyr, SensorManager.SENSOR_DELAY_GAME);
