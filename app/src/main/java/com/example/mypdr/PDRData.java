@@ -83,16 +83,6 @@ public class PDRData extends AppCompatActivity {
         mMapView = (MapView) findViewById(R.id.bmapView);
         mBaiduMap = mMapView.getMap();
 
-        // 设置地图中心点为30°N，114°E的经纬度位置
-        LatLng sourceLatLng = new LatLng(lat, lon);
-        CoordinateConverter converter = new CoordinateConverter()
-                .from(CoordinateConverter.CoordType.GPS)
-                .coord(sourceLatLng);
-        LatLng convertedpoint = converter.convert();
-        points.add(convertedpoint);
-
-        mBaiduMap.setMapStatus(MapStatusUpdateFactory.newLatLng(convertedpoint));
-
         checkTrack.setOnClickListener(v -> {
             if (!isshowTrack) {
                 mMapView.setVisibility(View.VISIBLE);
@@ -136,11 +126,24 @@ public class PDRData extends AppCompatActivity {
             InputStream inputStream = getContentResolver().openInputStream(fileUri);
             if (inputStream != null) {
                 BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
-                String line;
+                String line= reader.readLine();
+                String[] parts = line.split(",");
+                lat=Double.parseDouble(parts[0]);
+                lon=Double.parseDouble(parts[1]);
+                // 设置地图中心点为30°N，114°E的经纬度位置
+                LatLng sourceLatLng = new LatLng(lat, lon);
+                CoordinateConverter converter = new CoordinateConverter()
+                        .from(CoordinateConverter.CoordType.GPS)
+                        .coord(sourceLatLng);
+                LatLng convertedpoint = converter.convert();
+                points.add(convertedpoint);
+
+                mBaiduMap.setMapStatus(MapStatusUpdateFactory.newLatLng(convertedpoint));
+
                 while ((line = reader.readLine()) != null) {
                     stringBuilder.append(line).append("\n");
                     //后处理
-                    String[] parts = line.split(",");
+                    parts = line.split(",");
                     double time = Double.parseDouble(parts[1]);
                     double x = Double.parseDouble(parts[2]);
                     double y = Double.parseDouble(parts[3]);
