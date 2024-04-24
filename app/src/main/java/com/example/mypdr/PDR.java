@@ -327,6 +327,7 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
                 startlat = latitude;
                 startlon = longitude;
 
+
                 lat.setText("纬度: " + String.format("%.8f", latitude) + "°");
                 lon.setText("经度: " + String.format("%.8f", longitude) + "°");
                 warning.setText("");
@@ -509,6 +510,11 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         String s = String.format("%.10f,%.10f,", startlat, startlon);
         s += "\n";
         outputStream.write(s.getBytes());
+
+        double[] xy = CordTrans.BL2xy(latlon[0], latlon[1]);
+        s = String.format("%.6f,%.6f,", xy[0], xy[1]);
+        s += "\n";
+        outputStream2.write(s.getBytes());
 
         sensorManager.registerListener(this, acc, SensorManager.SENSOR_DELAY_GAME);
         sensorManager.registerListener(this, gyr, SensorManager.SENSOR_DELAY_GAME);
@@ -874,12 +880,13 @@ public class PDR extends AppCompatActivity implements SensorEventListener {
         textDist.setText("移动距离: " + df.format(totalDistance) + "m");
 
         double[] xy = CordTrans.BL2xy(latlon[0], latlon[1]);
+
+        xy[0] += meter * Math.cos(heading);
+        xy[1] += meter * Math.sin(heading);
         String s = String.format("%.6f,%.6f,", xy[0], xy[1]);
         s += "\n";
         outputStream2.write(s.getBytes());
 
-        xy[0] += meter * Math.cos(heading);
-        xy[1] += meter * Math.sin(heading);
         latlon = CordTrans.xytoBL(xy[0], xy[1], 114);
         lat.setText("纬度: " + String.format("%.8f", latlon[0]) + "°");
         lon.setText("经度: " + String.format("%.8f", latlon[1]) + "°");
