@@ -182,10 +182,10 @@ public class PDRData extends AppCompatActivity {
 
     //配置初始参数
     int timepause = 200;
-    int windowSize = 3;
+    int windowSize = 10;
     private static double miu2G = 0.01;
     private double[] gyroffset = new double[3];
-    private double threshold = 12; // 设置阈值
+    private double threshold = 11; // 设置阈值
     private double Psi = -5;//设置磁偏角
 
     private void PostPDR(ArrayList<double[]> accData, ArrayList<double[]> gyoData, ArrayList<double[]> magData) {
@@ -284,6 +284,34 @@ public class PDRData extends AppCompatActivity {
 
         return y0 + (y1 - y0) * ((timestamp - x0) / (x1 - x0));
     }
+    private static double nearestNeighborInterpolation(ArrayList<double[]> data, double timestamp, int[] index, int column, int flag) {
+        int n = data.size();
+        int i = 0;
+
+        // 从上次找到的位置开始查找
+        if (index[flag] >= 0 && index[flag] < n) {
+            i = index[flag];
+        }
+
+        // 寻找距离timestamp最近的数据点
+        double minDiff = Double.MAX_VALUE;
+        int nearestIndex = 0;
+        for (int j = i; j < n; j++) {
+            double diff = Math.abs(data.get(j)[0] - timestamp);
+            if (diff < minDiff) {
+                minDiff = diff;
+                nearestIndex = j;
+            }
+            else {
+                break; // 如果已经不再接近，跳出循环
+            }
+        }
+
+        // 更新位置索引
+        index[flag] = nearestIndex;
+
+        return data.get(nearestIndex)[column];
+    }
 
     private void getStartHeading(ArrayList<double[]> accData, ArrayList<double[]> magData, int startIndex, int endIndex) {
         double[] accMean = new double[3];
@@ -342,7 +370,7 @@ public class PDRData extends AppCompatActivity {
             double roll = Math.atan2(-acc[1], acc[2]);
 
             double mx = mag[1] * Math.cos(pitch) + mag[0] * Math.sin(roll) * Math.sin(pitch) - mag[2] * Math.cos(roll) * Math.sin(pitch);
-            double my = mag[0] * Math.cos(roll) - mag[1] * Math.sin(roll);
+            double my = mag[0] * Math.cos(roll) + mag[2] * Math.sin(roll);
             double psiD = -Math.atan2(my, mx);
 
             double startHeading = psiD + Psi * Math.PI / 180.0;
@@ -633,7 +661,7 @@ public class PDRData extends AppCompatActivity {
         // 脚步判断
         for (int i = 0; i < peakTimes.size(); i++) {
             if (i >= 2) {
-                if (peakTimes.get(i) - accMagnitude.get(realStepIndices.get(realStepIndices.size() - 2))[0] < 1 || peakTimes.get(i) - accMagnitude.get(realStepIndices.get(realStepIndices.size() - 1))[0] < 0.4)
+                if (peakTimes.get(i) - accMagnitude.get(realStepIndices.get(realStepIndices.size() - 2))[0] < 0.9 || peakTimes.get(i) - accMagnitude.get(realStepIndices.get(realStepIndices.size() - 1))[0] < 0.4)
                     continue;
             }
             realStepIndices.add(peakIndices.get(i));
@@ -663,7 +691,7 @@ public class PDRData extends AppCompatActivity {
         for (int i = 0; i < foot.size(); i++) {
             double[] headingRow = new double[2];
             headingRow[0] = foot.get(i)[0];
-            headingRow[1] = interpolate(heading, foot.get(i)[0], index, 1, 0);
+            headingRow[1] = nearestNeighborInterpolation(heading, foot.get(i)[0], index, 1, 0);
             newHeading.add(headingRow);
         }
     }
